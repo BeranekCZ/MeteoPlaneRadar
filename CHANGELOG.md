@@ -11,6 +11,31 @@ pohromadě v `MeteoPlaneRadar/Config.h`.
 
 ---
 
+## [0.9.10]
+
+### Přidáno
+
+- **Obrazovka Bambu Lab** ukazuje stav a průběh tisku, zbývající čas, vrstvu
+  a graf teplot trysky a podložky. Radar může přes místní síť nebo Bambu Cloud
+  sledovat jednu tiskárnu Bambu Lab souběžně s tiskárnou Prusa nebo Klipper.
+  Každá má vlastní historii teplot a senzory pro Home Assistant.
+- Obrazovka i hlídání Bambu Lab jsou ve výchozím nastavení vypnuté. Obrazovku
+  lze zapnout na záložce **Obrazovky**. Na záložce **Tiskárna** se po zaškrtnutí
+  **Hlídat Bambu Lab** zobrazí nastavení připojení a upozornění na dokončení,
+  chybu nebo pozastavení tisku. Současná upozornění obou tiskáren displej zobrazí
+  postupně. Webové nastavení je dostupné v češtině, angličtině a slovenštině.
+
+### Změněno
+
+- Opakované hlášení Bambu Lab obnoví čas posledního kontaktu. LCD se překreslí
+  při změně zobrazených údajů nebo přidání bodu do grafu. Při připojení přes
+  MQTT radar kontroluje volnou interní RAM v intervalu 500 ms.
+- Dekodéry radarových snímků ČHMÚ a RainViewer se vytvářejí při prvním použití
+  v PSRAM. Pro souběžné připojení k tiskárně a stahování radaru tak zbývá
+  přibližně o 91 kB více interní RAM.
+- Profil Arduino CLI pro ESP32-S3 je ve složce sketche a obsahuje knihovnu
+  PubSubClient 2.8 pro MQTT.
+
 ## [0.9.9]
 
 ### Přidáno

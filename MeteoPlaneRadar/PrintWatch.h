@@ -18,7 +18,8 @@
 //  Author:  Petr / chiptron.cz   (vyvoj / development: chiptron.cz)
 // =============================================================================
 #pragma once
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
 #include <math.h>      // NAN
 
 enum PrintState : uint8_t {
@@ -27,6 +28,8 @@ enum PrintState : uint8_t {
   PS_OFFLINE,        // nobody answers (printer off, wrong address)
   PS_AUTH,           // the printer wants a password / API key we do not have
   PS_BADREPLY,       // answers, but not like PrusaLink / Moonraker
+  PS_NO_REPORT,      // MQTT is up but printer telemetry is missing or stale
+  PS_CERT_CHANGED,   // LAN printer certificate differs from the paired one
   PS_IDLE,           // on, not printing
   PS_PREPARE,        // heating, busy
   PS_PRINTING,
@@ -65,8 +68,6 @@ enum PrintEvent : uint8_t { PE_NONE = 0, PE_FINISHED, PE_FAILED, PE_PAUSED };
 void PrintWatch_Begin();                  // setup(): starts the task
 void PrintWatch_Tick(bool screenShown);   // loop(): hands over config changes
 bool PrintWatch_Get(PrintInfo* out);      // copy of the latest snapshot
-// The next event, once. msg gets the printer's own words (error text), or "".
-PrintEvent PrintWatch_TakeEvent(char* msg, size_t cap);
 // The temperature history, oldest first, in tenths of a degree (INT16_MIN =
 // no value). ageS[i] is how many seconds ago sample i was taken. Returns n.
 int  PrintWatch_History(int16_t* noz, int16_t* nozT, int16_t* bed, int16_t* bedT,

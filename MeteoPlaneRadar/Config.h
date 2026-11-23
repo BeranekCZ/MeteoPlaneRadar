@@ -21,7 +21,7 @@
 // ---------------------------------------------------------------------------
 #define I2C_SDA   15
 #define I2C_SCL   7
-#define BOOT_PIN  0        // hold at power-up (~3 s) = factory reset
+#define MPR_BOOT_PIN  0        // hold at power-up (~3 s) = factory reset
 
 // ---------------------------------------------------------------------------
 //  Which board?
@@ -350,12 +350,13 @@
 // the screen arrives switched off. In the order it follows the 3D print.
 #define SCREEN_FX_I       8
 #define SCREEN_CRYPTO_I   9      // 0.9.7, bit 9 = bit 1 of "scrM2": off too
-#define SCREEN_N          10
+#define SCREEN_BAMBU_I    10     // bit 10 in scrBits, off on existing installations
+#define SCREEN_N          11
 // The order of the long press, the dots and the automatic cycling. Indices
 // are what NVS stores, so they never move; this table is what the user sees.
 #define SCREEN_ORDER_INIT { SCREEN_CLOCK_I, SCREEN_PLANES_I, SCREEN_METEO_I, \
                             SCREEN_FORECAST_I, SCREEN_PRICE_I, SCREEN_MIX_I, \
-                            SCREEN_PRINT_I, SCREEN_FX_I, SCREEN_CRYPTO_I, \
+                            SCREEN_PRINT_I, SCREEN_BAMBU_I, SCREEN_FX_I, SCREEN_CRYPTO_I, \
                             SCREEN_SETTINGS_I }
 
 // Automatic screen cycling: 0 = off, otherwise SECONDS between switches (it was
@@ -801,6 +802,17 @@
 #define PRINT_NIGHT_BLINK   0            // night brightness, banner blinks (default)
 #define PRINT_NIGHT_FULL    1            // full day brightness, blinks
 #define PRINT_NIGHT_CALM    2            // night brightness, no blinking
+
+// ---------------------------------------------------------------------------
+//  Bambu Lab monitoring
+// ---------------------------------------------------------------------------
+#define BAMBU_MQTT_PORT        8883
+#define BAMBU_REPORT_MAX       (64U * 1024U) // PSRAM, per complete MQTT message
+#define BAMBU_ACTIVE_STALE_MS  90000UL
+#define BAMBU_IDLE_STALE_MS    360000UL
+#define BAMBU_CLOUD_REFRESH_MS 300000UL
+#define BAMBU_LAN_REFRESH_MS   60000UL
+#define BAMBU_HEAP_CHECK_MS      500UL
 
 // ---------------------------------------------------------------------------
 //  adsb.fi overloaded or down (0.8.4)

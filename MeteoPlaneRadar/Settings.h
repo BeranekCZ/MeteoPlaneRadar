@@ -95,6 +95,7 @@ void    Settings_SetLanguage(uint8_t l);
 // --- Screens ----------------------------------------------------------------
 // idx is SCREEN_CLOCK_I .. SCREEN_FORECAST_I. Settings is always enabled.
 bool    Settings_ScreenEnabled(uint8_t idx);
+uint16_t Settings_ScreenMaskWith(JsonObjectConst changes);
 void    Settings_SetScreenEnabled(uint8_t idx, bool on);
 // Automatic screen cycling, in SECONDS. 0 = off.
 //

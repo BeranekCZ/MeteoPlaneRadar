@@ -24,6 +24,7 @@ ESP32-S3-Touch-LCD-2.1 a ESP32-S3-Touch-LCD-2.8C a nastavuje se z prohlížeče.
 | **Cena elektřiny** | spotová cena na 24hodinovém ciferníku, dnes i zítra | OTE přes spotovaelektrina.cz |
 | **Výroba ČR** | z čeho se právě vyrábí, podíl OZE, spotřeba, vývoz | ENTSO-E přes energy-charts |
 | **3D tisk** | průběh tisku na prstenci, zbývající čas, materiál, graf teplot | vaše tiskárna (PrusaLink, Moonraker) |
+| **Bambu Lab** | stav úlohy, průběh, zbývající čas, vrstvy a teploty | vaše tiskárna přes LAN nebo Bambu Cloud |
 | **Kurzy měn** | až 6 měn v domácí měně se změnou proti předchozímu kurzu | ČNB (pro CZK), jinak ECB |
 | **Kryptoměny** | až 6 mincí v domácí měně se změnou za 24 h | CoinGecko |
 | **Nastavení** | jas, orientace mapy, jednotky, jazyk | — |
@@ -203,7 +204,7 @@ nastavení.
 > dokumentaci PrusaLinku a Moonrakeru. Pokud něco nesedí, pošlete prosím řádek
 > Tiskárna ze stavové stránky webu.
 
-Zařízení umí hlídat jednu 3D tiskárnu v místní síti: **Prusa** přes PrusaLink
+Obrazovka **3D tisk** umí hlídat jednu místní tiskárnu typu **Prusa** přes PrusaLink
 (MK4, MK3.9, XL, MINI, CORE One, starší MK3S s RPi) nebo **Klipper** přes
 Moonraker. Nastavuje se na záložce **Tiskárna**: typ, IP adresa (u Klipperu
 případně s portem, výchozí je 7125), u Prusy jméno a heslo z menu tiskárny
@@ -228,6 +229,20 @@ Tiskárně se nikdy nic neposílá, zařízení jen čte. Nedostupná tiskárna
 nezpomalí displej ani web: dotazy běží ve vlastní úloze s krátkými limity a
 když tiskárna neodpovídá, ptá se zařízení jen jednou za minutu (po hodině
 jednou za 5 minut).
+
+## Bambu Lab
+
+Radar může současně hlídat jednu tiskárnu Bambu Lab a jednu tiskárnu Prusa nebo Klipper. Po instalaci i aktualizaci je obrazovka Bambu a její hlídání vypnuté.
+
+1. V prohlížeči na záložce **Obrazovky** zaškrtněte **Bambu Lab**. Zpřístupní se záložka **Tiskárna**. Výběr obrazovek se projeví po restartu. Web nabízí **Restartovat teď**, jinak zařízení po dvou minutách změny použije samo.
+2. Na záložce **Tiskárna** zaškrtněte **Hlídat Bambu Lab**. V zobrazeném formuláři vyplňte sériové číslo tiskárny. Pro **LAN** zadejte její IPv4 adresu a osmiznakový přístupový kód z nastavení sítě tiskárny. Tiskárna musí povolovat místní MQTT. Pro **Bambu Cloud** vyberte oblast účtu (pro ČR a SR **Globální**) a vložte platný přístupový token svého účtu Bambu. Po vypršení tokenu zde uložte nový.
+3. Stiskněte **Uložit tiskárnu**. Hlídání a volby upozornění se použijí ihned. Obrazovku si můžete otevřít i v klidu. Do automatického střídání se přidá při přípravě, tisku nebo pozastavení. Hlídání může zůstat zapnuté i po skrytí obrazovky.
+
+LCD ukazuje dostupné hodnoty, název úlohy a graf teplot trysky a podložky. Dokončení, chyba a pauza mají samostatné přepínače. Když reagují obě tiskárny, dotyk potvrdí právě zobrazené upozornění. Záložka **Home Assistant** nabídne senzory Bambu pod vlastními názvy. Ve stavovém API i v odpovědi `/api/ha` mají klíč `bambu`.
+
+První spojení přes LAN proveďte v důvěryhodné síti. Radar si po úspěšném přihlášení uloží otisk certifikátu. Změní-li se, ověřte adresu a identitu tiskárny. Tlačítkem **Zapomenout přístupy a párování** pak můžete otisk i přístupy odstranit a zadat kód znovu. Webový formulář používá HTTP. Kód a token jsou v nešifrované flash, prázdné pole při uložení zachová příslušný údaj. Do záloh se ukládá pouze veřejné nastavení Bambu.
+
+Ověření této verze zahrnuje simulované zprávy tiskárny a testovací MQTT spojení. Zkouška s fyzickou tiskárnou a živým účtem Bambu Cloud zatím chybí.
 
 ## Kurzy měn (0.9.6)
 
@@ -334,7 +349,7 @@ Podrobnosti v [OTA_NAVOD.md](OTA_NAVOD.md).
 
 Arduino IDE, **ESP32 core 3.x** (přeloženo s 3.3.10), knihovny: **GFX Library
 for Arduino** (≥ 1.5.3, přeloženo s 1.6.9), **PNGdec** (≥ 1.1.4, přeloženo
-s 1.1.7), **ArduinoJson v7**, QRCode (přibalen).
+s 1.1.6), **ArduinoJson 7.1.0**, **PubSubClient 2.8**, QRCode (přibalen).
 `WebServer`, `DNSServer`, `ESPmDNS`, `Update` a `Preferences` jsou v core.
 WiFiManager se nepoužívá od 0.6.0, ElegantOTA od 0.6.2.
 

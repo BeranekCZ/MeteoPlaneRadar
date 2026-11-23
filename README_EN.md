@@ -64,6 +64,7 @@ It is not a phone and does not try to be one.
 | **Electricity price** | spot price on a quarter-hour dial, today and tomorrow | OTE via spotovaelektrina.cz |
 | **Generation** | what the grid is running on, renewable share, load, export | Energy-Charts (Fraunhofer ISE) |
 | **3D print** | print progress on a ring, time left, material, temperature graph | your printer (PrusaLink, Moonraker) |
+| **Bambu Lab** | job state, progress, time left, layers and temperatures | your printer over LAN or Bambu Cloud |
 | **Exchange rates** | up to 6 currencies in your home currency, change against the previous fixing | CNB (for CZK), ECB otherwise |
 | **Crypto** | up to 6 coins in your home currency, change over 24 h | CoinGecko |
 | **Settings** | brightness, map orientation, units, language | — |
@@ -396,7 +397,7 @@ orientation are kept.
 > PrusaLink and Moonraker documentation. If something does not fit, please
 > send the Printer line of the web status page.
 
-The device can watch one 3D printer on the local network: **Prusa** through
+The **3D print** screen can monitor one local **Prusa** printer through
 PrusaLink (MK4, MK3.9, XL, MINI, CORE One, older MK3S with an RPi) or
 **Klipper** through Moonraker. Set it up on the **Printer** tab: type, IP
 address (for Klipper optionally with a port, 7125 by default) and for Prusa
@@ -424,6 +425,20 @@ Nothing is ever sent to the printer; the device only reads. An unreachable
 printer does not slow the display or the web UI: requests run in a task of
 their own with short timeouts, and while the printer does not answer it is
 asked once a minute (once every 5 minutes after an hour).
+
+## Bambu Lab
+
+The radar can monitor one Bambu Lab printer alongside one Prusa or Klipper printer. Both the Bambu screen and its monitor start disabled on new and upgraded devices.
+
+1. Open **Screens** in the web interface and tick **Bambu Lab**. This reveals the **Printer** tab. Changing the screen selection takes effect after a restart. Choose **Restart now** or let the two-minute countdown finish.
+2. On the **Printer** tab, enable **Monitor Bambu Lab** to show the settings. Enter the printer's serial number. For **LAN**, enter its IPv4 address and the eight-character access code shown in the printer's network settings. Local MQTT must be available on the printer. For **Bambu Cloud**, choose the region of your account and paste your own Bambu account access token. Save a fresh token here when it expires.
+3. Choose **Save printer**. Monitoring and alert settings take effect immediately. You can open the screen manually while idle. It joins automatic rotation during preparation, printing or a pause. Monitoring can also stay enabled with the screen hidden.
+
+The LCD shows the job name, available readings and nozzle/bed temperature history. Completion, failure and pause alerts can be selected separately. When both printers raise alerts, a tap acknowledges the one on display. The Home Assistant tab supplies separate Bambu sensor names. The status and Home Assistant endpoints expose the readings under `bambu`.
+
+Pair over LAN for the first time on a trusted network. The radar remembers the certificate fingerprint after a successful login. If the certificate changes, verify the printer and its address first. **Forget credentials and pairing** clears the fingerprint and credentials so you can enter the code and pair again. The settings form uses HTTP. Credentials live in unencrypted flash. A blank field keeps the stored value. Backups contain only the public Bambu settings.
+
+This version was checked with simulated printer reports and an in-memory MQTT broker. Physical printer and live Bambu Cloud verification are still pending.
 
 ## Exchange rates (0.9.6)
 
@@ -487,7 +502,7 @@ frame per 5 minutes) and a small aircraft poll (every 30 s) run too.
 
 Arduino IDE with **ESP32 core 3.x** (built with 3.3.10). Libraries: **GFX
 Library for Arduino** (1.5.3 or newer, built with 1.6.9), **PNGdec** (1.1.4 or
-newer, built with 1.1.7), **ArduinoJson v7**; QRCode is bundled. `WebServer`, `DNSServer`,
+newer, built with 1.1.6), **ArduinoJson 7.1.0** and **PubSubClient 2.8**. QRCode is bundled. `WebServer`, `DNSServer`,
 `ESPmDNS`, `Update` and `Preferences` come with the core. WiFiManager was
 dropped in 0.6.0, ElegantOTA in 0.6.2.
 

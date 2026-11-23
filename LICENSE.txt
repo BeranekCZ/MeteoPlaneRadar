@@ -69,6 +69,8 @@ and distribute.
 - GFX Library for Arduino (moononournation)
 - PNGdec (bitbank2)
 - ArduinoJson (bblanchon) - MIT
+- PubSubClient - Copyright (c) 2008-2020 Nicholas O'Leary, MIT
+  https://github.com/knolleary/pubsubclient/blob/v2.8/LICENSE.txt
 
 All three are permissively licensed, so they place no conditions on what you do
 with a binary beyond keeping their own notices.

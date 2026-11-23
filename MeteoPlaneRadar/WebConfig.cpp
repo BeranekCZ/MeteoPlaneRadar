@@ -27,6 +27,8 @@
 #include <DNSServer.h>
 #include <ESPmDNS.h>
 #include "PrintWatch.h"
+#include "BambuWatch.h"
+#include "BambuSettings.h"
 #include <ArduinoJson.h>
 #include <Update.h>
 #include <esp_heap_caps.h>
@@ -46,6 +48,7 @@
 extern int  MPR_CurrentScreen();
 extern bool MPR_AlertActive();
 extern bool MPR_PrintAlertActive();
+extern bool MPR_BambuAlertActive();
 
 static WebServer  s_srv(WEB_PORT);
 static DNSServer  s_dns;
@@ -94,13 +97,6 @@ static bool readBody(JsonDocument& doc) {
   return deserializeJson(doc, s_srv.arg("plain")) == DeserializationError::Ok;
 }
 
-// The screens by the names the page and the JSON use.
-static const struct { const char* key; uint8_t idx; } SCR_KEYS[] = {
-  { "clock",    SCREEN_CLOCK_I },  { "planes", SCREEN_PLANES_I }, { "meteo", SCREEN_METEO_I },
-  { "forecast", SCREEN_FORECAST_I }, { "price", SCREEN_PRICE_I }, { "mix",   SCREEN_MIX_I },
-  { "print",    SCREEN_PRINT_I },  { "fx",     SCREEN_FX_I },     { "crypto", SCREEN_CRYPTO_I },
-};
-
 // Does anything held back differ from what the device runs with? Ticking a
 // box and unticking it again leaves nothing to restart for.
 static bool pendDiffers() {
@@ -108,13 +104,7 @@ static bool pendDiffers() {
   if (!p["lat"].isNull() && fabs(p["lat"].as<double>() - Settings_Lat()) > 1e-6) return true;
   if (!p["lon"].isNull() && fabs(p["lon"].as<double>() - Settings_Lon()) > 1e-6) return true;
   if (!p["radarSrc"].isNull() && p["radarSrc"].as<uint8_t>() != Settings_RadarSource()) return true;
-  JsonObjectConst scr = p["screens"];
-  if (!scr.isNull())
-    for (auto& m : SCR_KEYS) {
-      JsonVariantConst v = scr[m.key];
-      if (!v.isNull() && v.as<bool>() != Settings_ScreenEnabled(m.idx)) return true;
-    }
-  return false;
+  return Settings_ScreenMaskWith(p["screens"]) != Settings_ScreenMaskWith(JsonObjectConst());
 }
 
 // Seconds until the device restarts by itself; 0 = nothing waiting.
@@ -211,6 +201,7 @@ static void handleGetConfig() {
   JsonDocument doc;
   JsonObject o = doc.to<JsonObject>();
   Settings_ToJson(o);
+  BambuSettings_ToJson(o["bambu"].to<JsonObject>(), true);
   // The remembered networks: names only. A password never leaves the device;
   // the page is told whether one is stored, so it can say so.
   {
@@ -237,14 +228,22 @@ static void handlePostConfig() {
 
   // 0.9.8: the restart-bound keys are taken out and held back (see s_pend).
   JsonObject in = doc.as<JsonObject>();
+  JsonDocument mergedScreens;
+  if (!in["screens"].isNull()) {
+    mergedScreens.set(s_pend["screens"]);
+    for (JsonPair kv : in["screens"].as<JsonObject>()) mergedScreens[kv.key()] = kv.value();
+    if (!in["screens"].is<JsonObject>() || !Settings_ScreenMaskWith(mergedScreens.as<JsonObjectConst>())) {
+      s_srv.send(400, "application/json", "{\"error\":\"screens\"}"); return;
+    }
+  }
+  const int bambuResult = BambuSettings_Apply(in["bambu"], true);
+  if (bambuResult != 200) { s_srv.send(bambuResult, "application/json", "{\"error\":\"bambu\"}"); return; }
   bool held = false;
   for (const char* k : { "lat", "lon", "radarSrc" }) {
     if (!in[k].isNull()) { s_pend[k] = in[k]; in.remove(k); held = true; }
   }
   if (!in["screens"].isNull()) {
-    JsonObject ps = s_pend["screens"].is<JsonObject>() ? s_pend["screens"].as<JsonObject>()
-                                                      : s_pend["screens"].to<JsonObject>();
-    for (JsonPair kv : in["screens"].as<JsonObject>()) ps[kv.key()] = kv.value();
+    s_pend["screens"].set(mergedScreens);
     in.remove("screens");
     held = true;
   }
@@ -307,6 +306,16 @@ static void handleRange() {
   int st = doc["step"] | 0;
   s_reqRangeStep = (st < 0) ? -1 : ((st > 0) ? +1 : 0);
   s_srv.send(200, "application/json", "{\"ok\":true}");
+}
+
+static void printerStatus(JsonObject p, const PrintInfo& pi) {
+  p["state"] = PrintState_Name(pi.state);
+  if (pi.pct >= 0) p["pct"] = (int)lroundf(pi.pct);
+  if (pi.remainS >= 0) p["remain_s"] = pi.remainS;
+  if (pi.elapsedS >= 0) p["elapsed_s"] = pi.elapsedS;
+  if (pi.file[0]) p["file"] = JsonString(pi.file, JsonString::Copied);
+  if (pi.material[0]) p["material"] = JsonString(pi.material, JsonString::Copied);
+  if (pi.nextPollMs) p["next_s"] = (long)(pi.nextPollMs - millis()) / 1000;
 }
 
 static void handleStatus() {
@@ -390,18 +399,11 @@ static void handleStatus() {
   Status_Text(ST_CRYPTO, b, sizeof(b));   doc["crypto"] = b;      // 0.9.7
   Status_Text(ST_ROUTE, b, sizeof(b));    doc["route"] = b;       // 0.9.7
   PrintWatch_StatusText(b, sizeof(b));    doc["printWatch"] = b;
-  {
-    PrintInfo pi;
-    PrintWatch_Get(&pi);
-    JsonObject p = doc["print"].to<JsonObject>();
-    p["state"] = PrintState_Name(pi.state);
-    if (pi.pct >= 0) p["pct"] = (int)lroundf(pi.pct);
-    if (pi.remainS >= 0) p["remain_s"] = pi.remainS;
-    if (pi.elapsedS >= 0) p["elapsed_s"] = pi.elapsedS;
-    if (pi.file[0]) p["file"] = pi.file;
-    if (pi.material[0]) p["material"] = pi.material;
-    if (pi.nextPollMs) p["next_s"] = (long)(pi.nextPollMs - millis()) / 1000;
-  }
+  PrintInfo pi;
+  PrintWatch_Get(&pi);
+  printerStatus(doc["print"].to<JsonObject>(), pi);
+  BambuWatch_Get(&pi);
+  printerStatus(doc["bambu"].to<JsonObject>(), pi);
   sendJson(200, doc);
 }
 
@@ -431,7 +433,24 @@ static void handleWifiList() {
 // Home Assistant: the shape follows the documented REST sensor, but nobody has
 // pointed one at it yet.
 static const char* const SCREEN_KEYS[SCREEN_N] = {
-  "clock", "planes", "meteo", "forecast", "price", "mix", "settings", "print", "fx", "crypto" };
+  "clock", "planes", "meteo", "forecast", "price", "mix", "settings", "print", "fx", "crypto", "bambu" };
+
+static void printerHa(JsonObject p, const PrintInfo& pi, bool alert) {
+  p["state"]     = PrintState_Name(pi.state);
+  p["online"]    = PrintState_Online(pi.state);
+  p["printing"]  = PrintState_Active(pi.state);
+  p["alert"]     = alert;
+  if (pi.pct >= 0) p["progress"] = roundf(pi.pct * 10) / 10; else p["progress"] = nullptr;
+  if (pi.remainS >= 0) p["remaining_s"] = pi.remainS; else p["remaining_s"] = nullptr;
+  if (pi.elapsedS >= 0) p["elapsed_s"] = pi.elapsedS; else p["elapsed_s"] = nullptr;
+  p["file"]      = JsonString(pi.file, JsonString::Copied);
+  p["material"]  = JsonString(pi.material, JsonString::Copied);
+  if (isfinite(pi.tNoz)) p["nozzle_c"] = roundf(pi.tNoz * 10) / 10; else p["nozzle_c"] = nullptr;
+  if (isfinite(pi.tBed)) p["bed_c"] = roundf(pi.tBed * 10) / 10;    else p["bed_c"] = nullptr;
+  if (pi.layer >= 0) p["layer"] = pi.layer;
+  if (pi.layers > 0) p["layers"] = pi.layers;
+  p["message"]   = JsonString(pi.message, JsonString::Copied);
+}
 
 static void handleHa() {
   if (!Settings_HaEnabled()) {
@@ -533,26 +552,11 @@ static void handleHa() {
   }
   if (Energy_MixValid()) doc["renewable_pct"] = roundf(Energy_RenewableShare() * 10) / 10;
 
-  // 3D printer (0.9.0). Only when a printer is set up.
-  if (Settings_PrintOn()) {
-    PrintInfo pi;
-    PrintWatch_Get(&pi);
-    JsonObject p = doc["print"].to<JsonObject>();
-    p["state"]     = PrintState_Name(pi.state);
-    p["online"]    = PrintState_Online(pi.state);
-    p["printing"]  = PrintState_Active(pi.state);
-    p["alert"]     = MPR_PrintAlertActive();
-    if (pi.pct >= 0) p["progress"] = roundf(pi.pct * 10) / 10; else p["progress"] = nullptr;
-    if (pi.remainS >= 0) p["remaining_s"] = pi.remainS; else p["remaining_s"] = nullptr;
-    if (pi.elapsedS >= 0) p["elapsed_s"] = pi.elapsedS; else p["elapsed_s"] = nullptr;
-    p["file"]      = pi.file;
-    p["material"]  = pi.material;
-    if (isfinite(pi.tNoz)) p["nozzle_c"] = roundf(pi.tNoz * 10) / 10; else p["nozzle_c"] = nullptr;
-    if (isfinite(pi.tBed)) p["bed_c"] = roundf(pi.tBed * 10) / 10;    else p["bed_c"] = nullptr;
-    if (pi.layer >= 0) p["layer"] = pi.layer;
-    if (pi.layers > 0) p["layers"] = pi.layers;
-    p["message"]   = pi.message;
-  }
+  PrintInfo pi;
+  if (Settings_PrintOn() && PrintWatch_Get(&pi))
+    printerHa(doc["print"].to<JsonObject>(), pi, MPR_PrintAlertActive());
+  if (BambuSettings_On() && BambuWatch_Get(&pi))
+    printerHa(doc["bambu"].to<JsonObject>(), pi, MPR_BambuAlertActive());
 
   sendJson(200, doc);
 }
@@ -631,6 +635,7 @@ static void sendExport(bool secrets) {
   JsonDocument doc;
   JsonObject o = doc.to<JsonObject>();
   Settings_ToJson(o);
+  BambuSettings_ToJson(o["bambu"].to<JsonObject>(), false);
   o["version"] = FW_VERSION;
   // Never in it: the WiFi passwords and the admin password. A backup file ends
   // up in a download folder, in an email, in a support ticket.
@@ -659,6 +664,11 @@ static void handleImport() {
   if (!authed(doc)) return;
   JsonObjectConst cfg = doc["config"];
   if (cfg.isNull()) { s_srv.send(400, "application/json", "{\"error\":\"config\"}"); return; }
+  if (!Settings_ScreenMaskWith(cfg["screens"])) {
+    s_srv.send(400, "application/json", "{\"error\":\"screens\"}"); return;
+  }
+  const int bambuResult = BambuSettings_Apply(cfg["bambu"], false);
+  if (bambuResult != 200) { s_srv.send(bambuResult, "application/json", "{\"error\":\"bambu\"}"); return; }
   Settings_FromJson(cfg);
   // The printer's secrets come along only with "printExport" on (in the file
   // or already on the device). Empty or missing leaves them as they are.

@@ -14,9 +14,9 @@
 #include <Arduino.h>
 #include "PrintWatch.h"
 
-void ScreenPrint_Enter();
+void ScreenPrint_Enter(bool bambu);
 bool ScreenPrint_Tick();       // true = redraw
 void ScreenPrint_Draw();
 
-void ScreenPrint_AlertBegin(PrintEvent e, const char* msg, bool blink);
+void ScreenPrint_AlertBegin(PrintEvent e, const char* msg, const char* file, bool blink);
 void ScreenPrint_AlertEnd();

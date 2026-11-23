@@ -6,6 +6,8 @@
 // =============================================================================
 #include "Settings.h"
 #include "Lang.h"
+#include "BambuSettings.h"
+#include "ScreenMask.h"
 #include <Preferences.h>
 #include <string.h>
 #include <ctype.h>
@@ -54,7 +56,7 @@ static uint8_t s_lang   = LANG_CZ;
 //
 // It also means Energy_Tick() makes no requests at all on a device whose owner
 // never asked for them - the enabled bits are what that decision is read from.
-// 0.9.6: 16 bits - the low byte stays in "scrM", bit 8 and up in "scrM2".
+// The full selection is committed as one NVS value. Older firmware used scrM and scrM2.
 static uint16_t s_scrMask = (1 << SCREEN_CLOCK_I) | (1 << SCREEN_PLANES_I) |
                             (1 << SCREEN_METEO_I) | (1 << SCREEN_FORECAST_I);
 static uint16_t s_autoRot = 0;
@@ -158,6 +160,7 @@ static void copyClean(char* dst, size_t cap, const char* src) {
 }
 
 void Settings_Begin() {
+  BambuSettings_Begin();
   bool migrateRotate = false;
   if (prefs.begin(NS, true)) {
     s_lat    = prefs.getDouble("lat", DEFAULT_LAT);
@@ -185,6 +188,7 @@ void Settings_Begin() {
     if (s_lang >= LANG_N) s_lang = LANG_CZ;
     s_scrMask = (uint16_t)(prefs.getUChar("scrM", (uint8_t)s_scrMask) |
                            ((uint16_t)prefs.getUChar("scrM2", 0) << 8));
+    s_scrMask = prefs.getUShort("scrBits", s_scrMask);
     // Cycling interval moved from minutes to seconds - see Settings.h. The old
     // key is converted exactly once, so an updated device keeps its setting.
     if (prefs.isKey("autoRS")) {
@@ -446,17 +450,20 @@ bool Settings_ScreenEnabled(uint8_t idx) {
   return (s_scrMask >> idx) & 1;
 }
 
+uint16_t Settings_ScreenMaskWith(JsonObjectConst changes) {
+  return ScreenMask_Merge(s_scrMask, changes);
+}
+
+static void storeScreenMask(uint16_t next) {
+  if (!next || next == s_scrMask || !prefs.begin(NS, false)) return;
+  if (prefs.putUShort("scrBits", next) == sizeof(next)) s_scrMask = next;
+  prefs.end();
+}
+
 void Settings_SetScreenEnabled(uint8_t idx, bool on) {
   if (idx == SCREEN_SETTINGS_I || idx >= SCREEN_N) return;
-  uint16_t next = on ? (uint16_t)(s_scrMask | (1u << idx))
-                     : (uint16_t)(s_scrMask & ~(1u << idx));
-  // Never allow the last data screen to be turned off. With all of them gone
-  // the device would boot into Settings and show nothing else - technically
-  // recoverable, but it looks broken.
-  if (next == 0) return;
-  s_scrMask = next;
-  putU8("scrM", (uint8_t)(s_scrMask & 0xFF));
-  putU8("scrM2", (uint8_t)(s_scrMask >> 8));
+  const uint16_t bit = 1u << idx;
+  storeScreenMask(on ? (s_scrMask | bit) : (s_scrMask & ~bit));
 }
 
 uint16_t Settings_AutoRotateSec() { return s_autoRot; }
@@ -1017,15 +1024,7 @@ void Settings_ToJson(JsonObject o) {
   o["watch"] = s_watch;
   o["hasPassword"] = Settings_HasAdminPassword();
   JsonObject scr = o["screens"].to<JsonObject>();
-  scr["clock"]    = Settings_ScreenEnabled(SCREEN_CLOCK_I);
-  scr["planes"]   = Settings_ScreenEnabled(SCREEN_PLANES_I);
-  scr["meteo"]    = Settings_ScreenEnabled(SCREEN_METEO_I);
-  scr["forecast"] = Settings_ScreenEnabled(SCREEN_FORECAST_I);
-  scr["price"]    = Settings_ScreenEnabled(SCREEN_PRICE_I);
-  scr["mix"]      = Settings_ScreenEnabled(SCREEN_MIX_I);
-  scr["print"]    = Settings_ScreenEnabled(SCREEN_PRINT_I);
-  scr["fx"]       = Settings_ScreenEnabled(SCREEN_FX_I);
-  scr["crypto"]   = Settings_ScreenEnabled(SCREEN_CRYPTO_I);
+  for (const auto& entry : SCREEN_DATA_KEYS) scr[entry.key] = Settings_ScreenEnabled(entry.idx);
 }
 
 bool Settings_FromJson(JsonObjectConst in) {
@@ -1160,21 +1159,9 @@ bool Settings_FromJson(JsonObjectConst in) {
 
   JsonObjectConst scr = in["screens"];
   if (!scr.isNull()) {
-    struct { const char* key; uint8_t idx; } M[] = {
-      { "clock",    SCREEN_CLOCK_I },
-      { "planes",   SCREEN_PLANES_I },
-      { "meteo",    SCREEN_METEO_I },
-      { "forecast", SCREEN_FORECAST_I },
-      { "price",    SCREEN_PRICE_I },
-      { "mix",      SCREEN_MIX_I },
-      { "print",    SCREEN_PRINT_I },
-      { "fx",       SCREEN_FX_I },
-      { "crypto",   SCREEN_CRYPTO_I },
-    };
-    for (auto& m : M) {
-      JsonVariantConst v = scr[m.key];
-      if (!v.isNull()) { Settings_SetScreenEnabled(m.idx, v.as<bool>()); changed = true; }
-    }
+    const uint16_t next = Settings_ScreenMaskWith(scr);
+    changed |= next && next != s_scrMask;
+    storeScreenMask(next);
   }
   return changed;
 }
@@ -1196,6 +1183,7 @@ void Settings_Tick() {
 }
 
 void Settings_ClearAll() {
+  BambuSettings_Reset();
   if (prefs.begin(NS, false)) { prefs.clear(); prefs.end(); }
   s_lat = DEFAULT_LAT; s_lon = DEFAULT_LON; s_hasLoc = false;
   s_briDay = 80; s_briNight = 25; s_nightAuto = true; s_nightOff = 0; s_isNight = false;

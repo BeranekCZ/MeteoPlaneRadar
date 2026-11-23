@@ -194,7 +194,8 @@ td:first-child{color:var(--mut);width:50%}
       <label class="chk"><input type="checkbox" id="sForecast"><span data-i18n="scrForecast">Předpověď</span></label>
       <label class="chk"><input type="checkbox" id="sPrice"><span data-i18n="scrPrice">Cena elektřiny</span></label>
       <label class="chk"><input type="checkbox" id="sMix"><span data-i18n="scrMix">Výroba ČR</span></label>
-      <label class="chk"><input type="checkbox" id="sPrint"><span data-i18n="scrPrint">3D tisk</span></label>
+      <label class="chk"><input type="checkbox" id="sPrint"><span data-i18n="scrPrint">3D tisk</span> (Prusa / Klipper)</label>
+      <label class="chk"><input type="checkbox" id="sBambu"><span data-i18n="scrBambu">Bambu Lab</span></label>
       <label class="chk"><input type="checkbox" id="sFx"><span data-i18n="scrFx">Kurzy měn</span></label>
       <label class="chk"><input type="checkbox" id="sCrypto"><span data-i18n="scrCrypto">Kryptoměny</span></label>
     </div>
@@ -446,7 +447,7 @@ td:first-child{color:var(--mut);width:50%}
 <!-- ================= TISKÁRNA (0.9.0) ================= -->
 <section id="tPrint" class="tab hide">
   <div class="card">
-    <h2 data-i18n="printHdr">3D tiskárna</h2>
+    <h2>Prusa / Klipper</h2>
     <div class="row"><label class="chk"><input type="checkbox" id="printOn"><span data-i18n="printOn">Hlídat 3D tiskárnu</span></label></div>
     <div class="dep" data-dep="printOn">
       <div class="row"><label data-i18n="printType">Typ</label>
@@ -475,8 +476,8 @@ td:first-child{color:var(--mut);width:50%}
     <p class="hint" data-i18n="printIntro"></p>
   </div>
 
-  <div class="card">
-    <h2 data-i18n="printAlertHdr">Upozornění</h2>
+  <div class="card" id="prusaAlerts">
+    <h2><span data-i18n="printAlertHdr">Upozornění</span> · Prusa / Klipper</h2>
     <div class="row"><label class="chk"><input type="checkbox" id="printAlertFinish"><span data-i18n="printAlertFinish">Tisk je hotový</span></label></div>
     <div class="row"><label class="chk"><input type="checkbox" id="printAlertError"><span data-i18n="printAlertError">Chyba tisku</span></label></div>
     <div class="row"><label class="chk"><input type="checkbox" id="printAlertPause"><span data-i18n="printAlertPause">Tisk se pozastavil</span></label></div>
@@ -487,6 +488,45 @@ td:first-child{color:var(--mut);width:50%}
         <option value="2" data-i18n="printNight2">noční jas, neblikat</option>
       </select></div>
     <p class="hint" data-i18n="printAlertHint"></p>
+  </div>
+
+  <div class="card">
+    <h2>Bambu Lab</h2>
+    <div class="row"><label class="chk"><input type="checkbox" id="bambuOn"><span data-i18n="bWatch">Hlídat Bambu Lab</span></label></div>
+    <div id="bambuForm" class="dep hide" data-dep="bambuOn">
+      <div class="row"><label for="bambuMode" data-i18n="bMode">Připojení</label>
+        <select id="bambuMode"><option value="lan">LAN</option><option value="cloud">Bambu Cloud</option></select></div>
+      <div class="row"><label for="bambuSerial" data-i18n="bSerial">Sériové číslo tiskárny</label>
+        <input type="text" id="bambuSerial" maxlength="32" autocomplete="off" spellcheck="false"></div>
+      <div id="bambuLan">
+        <div class="row"><label for="bambuHost" data-i18n="printHost">Adresa (IP)</label>
+          <input type="text" id="bambuHost" maxlength="15" placeholder="192.168.1.50" autocomplete="off" spellcheck="false"></div>
+        <div class="row"><label for="bambuCode" data-i18n="bCode">Přístupový kód LAN</label>
+          <input type="password" id="bambuCode" maxlength="8" autocomplete="new-password"></div>
+        <p class="hint" data-i18n="bLanHint"></p>
+      </div>
+      <div id="bambuCloud">
+        <div class="row"><label for="bambuRegion" data-i18n="bRegion">Oblast účtu</label>
+          <select id="bambuRegion"><option value="global" data-i18n="bGlobal"></option><option value="cn" data-i18n="bChina"></option></select></div>
+        <div class="row"><label for="bambuToken" data-i18n="bToken">Přístupový token</label>
+          <input type="password" id="bambuToken" maxlength="2048" autocomplete="new-password"></div>
+        <p class="hint" data-i18n="bCloudHint"></p>
+      </div>
+      <p class="hint" id="bambuSecretState"></p>
+      <p class="hint" data-i18n="bSecretHint"></p>
+      <div class="row">
+        <button type="button" onclick="saveBambu()" data-i18n="printSave">Uložit tiskárnu</button>
+        <button type="button" class="sec" onclick="saveBambu(true)" data-i18n="bForget">Zapomenout přístupy a párování</button>
+      </div>
+      <p><b data-i18n="printNow">Stav:</b> <span id="bambuSt">–</span></p>
+      <h3 data-i18n="printAlertHdr">Upozornění</h3>
+      <div class="row"><label class="chk"><input type="checkbox" id="bambuFinish"><span data-i18n="printAlertFinish">Tisk je hotový</span></label></div>
+      <div class="row"><label class="chk"><input type="checkbox" id="bambuError"><span data-i18n="printAlertError">Chyba tisku</span></label></div>
+      <div class="row"><label class="chk"><input type="checkbox" id="bambuPause"><span data-i18n="printAlertPause">Tisk se pozastavil</span></label></div>
+      <div class="row"><label for="bambuNight" data-i18n="printNight">V noci</label>
+        <select id="bambuNight"><option value="0" data-i18n="printNight0"></option>
+          <option value="1" data-i18n="printNight1"></option><option value="2" data-i18n="printNight2"></option></select></div>
+    </div>
   </div>
 </section>
 
@@ -725,6 +765,24 @@ const D={
   fxSrcCnb:"Zdroj: Česká národní banka, kurzy devizového trhu. Vyhlašují se v pracovní dny kolem 14:30, o víkendu a ve svátek platí poslední kurz.",
   fxSrcEcb:"Zdroj: Evropská centrální banka, referenční kurzy. Vyhlašují se v pracovní dny kolem 16:00; kurz mezi dvěma měnami jinými než euro se přepočítá přes euro.",
   fxListHint:"Nejvýše šest měn, domácí měna vybrat nejde. Měny s malou hodnotou jednotky se ukazují za 100 nebo 1000 kusů (třeba 100 HUF), stejně jako na kurzovním lístku. Domácí měna i výběr jsou součástí exportu a importu nastavení.",
+  scrBambu:"Bambu Lab",
+  bWatch:"Hlídat Bambu Lab",
+  bMode:"Připojení",
+  bSerial:"Sériové číslo tiskárny",
+  bCode:"Přístupový kód LAN",
+  bRegion:"Oblast účtu",
+  bGlobal:"Globální",
+  bChina:"Čína",
+  bToken:"Přístupový token",
+  bLanHint:"Na displeji tiskárny najdete IP adresu, sériové číslo a osmimístný přístupový kód. Při prvním spojení v důvěryhodné síti si radar zapamatuje certifikát tiskárny.",
+  bCloudHint:"Zadejte token vlastního účtu Bambu a oblast, ve které je tiskárna registrovaná. Po vypršení tokenu uložte nový.",
+  bSecretHint:"Prázdné pole ponechá uložený přístup. Kód a token se nezahrnují do zálohy. Zadávejte je v důvěryhodné síti, formulář používá HTTP.",
+  bForget:"Zapomenout přístupy a párování",
+  bForgotten:"Přístupy a párování byly odstraněny.",
+  bInvalid:"Zkontrolujte sériové číslo a údaje připojení.",
+  bAuth:"Zkontrolujte přístupový kód nebo token.",
+  bReport:"Připojeno, čekám na zprávu tiskárny.",
+  bCert:"Certifikát se změnil. Ověřte tiskárnu a obnovte párování.",
   routeSt:"Trasa letu",tabPrint:"Tiskárna",scrPrint:"3D tisk",printHdr:"3D tiskárna",printOn:"Hlídat 3D tiskárnu",printType:"Typ",printHost:"Adresa (IP)",printHostHint:"Zadejte IP adresu tiskárny, název s .local funguje taky, ale pomaleji. Prusa: adresu najdete na displeji tiskárny v nastavení sítě. Klipper: Moonraker běží obvykle na portu 7125, ten se doplní sám; když ho máte jen přes port 80 (Mainsail, Fluidd), napište 192.168.1.50:80.",printUser:"Uživatel",printPass:"Heslo",printKey:"API klíč",printAuthHint:"Prusa chce jméno a heslo, nebo API klíč. Obojí najdete na displeji tiskárny v nastavení sítě u PrusaLinku, uživatel bývá maker. Klipper v domácí síti obvykle nic nechce; API klíč vyplňte, jen když ho máte v Moonrakeru zapnutý. Zařízení tiskárnu jen čte, nikdy ji neovládá. Adresa, jméno, heslo a klíč se ukládají až tlačítkem Uložit tiskárnu, aby se neposílaly při každém napsaném písmenu.",printExport:"Heslo a API klíč i do exportu a importu nastavení",printExportHint:"Heslo, jméno i klíč si zařízení pamatuje i po restartu, jeho paměť ale není šifrovaná. Zaškrtnuté se heslo a klíč přidají do souboru exportu nastavení (čitelně) a import je převezme; export je pak chráněný heslem správce, pokud ho máte. Bez zaškrtnutí v exportu nejsou a import je nemění.",printSave:"Uložit tiskárnu",printForget:"Zapomenout heslo a klíč",printNow:"Stav:",printIntro:"Ukazuje průběh tisku na obrazovce 3D tisk (zapnete na záložce Obrazovky) a upozorní, když tisk skončí, selže nebo se pozastaví. Obrazovka se do střídání přidává jen během tisku. Když tiskárna neodpovídá, zařízení se ptá jednou za minutu, po hodině jednou za 5 minut, a nic jiného tím nezdržuje.",printAlertHdr:"Upozornění",printAlertFinish:"Tisk je hotový",printAlertError:"Chyba tisku",printAlertPause:"Tisk se pozastavil (filament, tiskárna vyžaduje pozornost)",printNight:"V noci",printNight0:"noční jas, blikat",printNight1:"plný jas, blikat",printNight2:"noční jas, neblikat",printAlertHint:"Upozornění přepne na obrazovku 3D tisk, i když je vypnutá, a drží ji, dokud se displeje nedotknete. Když nikdo nepřijde, po 30 minutách se vrátí předchozí obrazovka a na hodinách zůstane barevná tečka. Zrušený tisk neupozorňuje, protože ho obvykle zrušil sám uživatel. Po restartu zařízení se už hotový tisk znovu nehlásí.",printSt:"3D tiskárna",printStored:"uloženo",printNone:"nezadáno",printInExport:"i v exportu",printForgotten:"Heslo a klíč zapomenuty",psDisabled:"vypnuto",psUnknown:"zjišťuji…",psOffline:"nedostupná",psAuth:"chybí nebo nesedí heslo / API klíč",psBad:"odpovídá, ale nerozumím (typ, adresa?)",psIdle:"připravena",psPrep:"připravuje se",psPrinting:"tiskne",psPaused:"pozastaveno",psFinished:"hotovo",psFailed:"chyba",psCancelled:"zrušeno",psLeft:"zbývá",psNext:"další pokus za"},
  en:{tabCtl:"Control",tabLoc:"Location",tabScr:"Screens",tabLook:"Display",tabClock:"Clock",tabMeteo:"Weather radar",fontHdr:"Typeface",tabPlanes:"Aircraft",
   tabEnergy:"Energy",tabSys:"System",scrPrice:"Electricity price",scrMix:"Czech generation",
@@ -845,6 +903,24 @@ const D={
   fxSrcCnb:"Source: Czech National Bank, the daily exchange rate fixing. Published on working days around 14:30; at weekends and on holidays the last one stays valid.",
   fxSrcEcb:"Source: European Central Bank reference rates. Published on working days around 16:00; a rate between two currencies other than the euro is worked out through the euro.",
   fxListHint:"Six currencies at most; the home currency cannot be picked. Currencies with a small unit are shown per 100 or 1000 (e.g. 100 HUF), as on a bank's rate sheet. The home currency and the selection are part of the settings export and import.",
+  scrBambu:"Bambu Lab",
+  bWatch:"Monitor Bambu Lab",
+  bMode:"Connection",
+  bSerial:"Printer serial number",
+  bCode:"LAN access code",
+  bRegion:"Account region",
+  bGlobal:"Global",
+  bChina:"China",
+  bToken:"Access token",
+  bLanHint:"Find the IP address, serial number and eight-character access code on the printer. Pair on a trusted network so the radar can remember the printer certificate.",
+  bCloudHint:"Enter your own Bambu account token and the region where the printer is registered. Save a new token when it expires.",
+  bSecretHint:"An empty field keeps the stored credential. Backups omit the code and token. Enter them on a trusted network because this form uses HTTP.",
+  bForget:"Forget credentials and pairing",
+  bForgotten:"Credentials and pairing cleared.",
+  bInvalid:"Check the printer serial number and connection details.",
+  bAuth:"Check the access code or token.",
+  bReport:"Connected, waiting for a printer report.",
+  bCert:"Certificate changed. Verify the printer and pair again.",
   routeSt:"Flight route",tabPrint:"Printer",scrPrint:"3D print",printHdr:"3D printer",printOn:"Watch a 3D printer",printType:"Type",printHost:"Address (IP)",printHostHint:"Enter the printer's IP address; a .local name works too, only slower. Prusa: the address is on the printer's display in the network settings. Klipper: Moonraker usually listens on port 7125, which is added by itself; if you only have it on port 80 (Mainsail, Fluidd), write 192.168.1.50:80.",printUser:"User",printPass:"Password",printKey:"API key",printAuthHint:"Prusa wants a user and password, or an API key. Both are on the printer's display in the network settings under PrusaLink; the user is usually maker. Klipper on a home network usually wants nothing; fill in an API key only if Moonraker has one switched on. The device only reads the printer, it never controls it. The address, user, password and key are saved with the Save printer button, so they are not sent with every letter typed.",printExport:"Include the password and API key in the settings export and import",printExportHint:"The device keeps the password, user and key across restarts, but its memory is not encrypted. Ticked, the password and key are added to the settings export file (readable) and an import takes them over; the export then asks for the admin password, if you have one. Unticked, they are not in the export and an import leaves them alone.",printSave:"Save printer",printForget:"Forget password and key",printNow:"State:",printIntro:"Shows the print on the 3D print screen (switch it on in the Screens tab) and alerts you when a print finishes, fails or pauses. The screen joins the cycling only while printing. When the printer does not answer, the device asks once a minute, after an hour once every 5 minutes, and nothing else waits for it.",printAlertHdr:"Alerts",printAlertFinish:"Print finished",printAlertError:"Print failed",printAlertPause:"Print paused (filament, printer needs attention)",printNight:"At night",printNight0:"night brightness, blink",printNight1:"full brightness, blink",printNight2:"night brightness, no blinking",printAlertHint:"An alert switches to the 3D print screen, even when it is switched off, and holds it until you touch the display. If nobody comes, after 30 minutes the previous screen returns and a coloured dot stays on the clock. A cancelled print gives no alert - it is nearly always the user's own doing. After a restart of the device a finished print is not reported again.",printSt:"3D printer",printStored:"stored",printNone:"not set",printInExport:"also in the export",printForgotten:"Password and key forgotten",psDisabled:"off",psUnknown:"checking…",psOffline:"not reachable",psAuth:"password / API key missing or wrong",psBad:"answers, but not as expected (type, address?)",psIdle:"ready",psPrep:"preparing",psPrinting:"printing",psPaused:"paused",psFinished:"finished",psFailed:"error",psCancelled:"cancelled",psLeft:"left",psNext:"next try in"},
  sk:{tabCtl:"Ovládanie",tabLoc:"Poloha",tabScr:"Obrazovky",tabLook:"Displej",tabClock:"Hodiny",tabMeteo:"Meteoradar",fontHdr:"Písmo",tabPlanes:"Lietadlá",
   tabEnergy:"Energia",tabSys:"Systém",scrPrice:"Cena elektriny",scrMix:"Výroba ČR",energyPrice:"Cena elektriny",
@@ -966,6 +1042,24 @@ const D={
   fxSrcCnb:"Zdroj: Česká národná banka, kurzy devízového trhu. Vyhlasujú sa v pracovné dni okolo 14:30, cez víkend a vo sviatok platí posledný kurz.",
   fxSrcEcb:"Zdroj: Európska centrálna banka, referenčné kurzy. Vyhlasujú sa v pracovné dni okolo 16:00; kurz medzi dvoma menami inými než euro sa prepočíta cez euro.",
   fxListHint:"Najviac šesť mien, domácu menu vybrať nejde. Meny s malou hodnotou jednotky sa ukazujú za 100 alebo 1000 kusov (napríklad 100 HUF), rovnako ako na kurzovom lístku. Domáca mena aj výber sú súčasťou exportu a importu nastavení.",
+  scrBambu:"Bambu Lab",
+  bWatch:"Strážiť Bambu Lab",
+  bMode:"Pripojenie",
+  bSerial:"Sériové číslo tlačiarne",
+  bCode:"Prístupový kód LAN",
+  bRegion:"Oblasť účtu",
+  bGlobal:"Globálna",
+  bChina:"Čína",
+  bToken:"Prístupový token",
+  bLanHint:"Na displeji tlačiarne nájdete IP adresu, sériové číslo a osemmiestny prístupový kód. Pri prvom spojení v dôveryhodnej sieti si radar zapamätá certifikát tlačiarne.",
+  bCloudHint:"Zadajte token vlastného účtu Bambu a oblasť, v ktorej je tlačiareň registrovaná. Po vypršaní tokenu uložte nový.",
+  bSecretHint:"Prázdne pole ponechá uložený prístup. Kód a token sa nezahŕňajú do zálohy. Zadávajte ich v dôveryhodnej sieti, formulár používa HTTP.",
+  bForget:"Zabudnúť prístupy a párovanie",
+  bForgotten:"Prístupy a párovanie boli odstránené.",
+  bInvalid:"Skontrolujte sériové číslo a údaje pripojenia.",
+  bAuth:"Skontrolujte prístupový kód alebo token.",
+  bReport:"Pripojené, čakám na správu tlačiarne.",
+  bCert:"Certifikát sa zmenil. Overte tlačiareň a obnovte párovanie.",
   routeSt:"Trasa letu",tabPrint:"Tlačiareň",scrPrint:"3D tlač",printHdr:"3D tlačiareň",printOn:"Strážiť 3D tlačiareň",printType:"Typ",printHost:"Adresa (IP)",printHostHint:"Zadajte IP adresu tlačiarne, názov s .local funguje tiež, ale pomalšie. Prusa: adresu nájdete na displeji tlačiarne v nastaveniach siete. Klipper: Moonraker beží zvyčajne na porte 7125, ten sa doplní sám; keď ho máte len cez port 80 (Mainsail, Fluidd), napíšte 192.168.1.50:80.",printUser:"Používateľ",printPass:"Heslo",printKey:"API kľúč",printAuthHint:"Prusa chce meno a heslo, alebo API kľúč. Oboje nájdete na displeji tlačiarne v nastaveniach siete pri PrusaLinku, používateľ býva maker. Klipper v domácej sieti zvyčajne nič nechce; API kľúč vyplňte, len keď ho máte v Moonrakeri zapnutý. Zariadenie tlačiareň len číta, nikdy ju neovláda. Adresa, meno, heslo a kľúč sa ukladajú až tlačidlom Uložiť tlačiareň, aby sa neposielali pri každom napísanom písmene.",printExport:"Heslo a API kľúč aj do exportu a importu nastavení",printExportHint:"Heslo, meno aj kľúč si zariadenie pamätá aj po reštarte, jeho pamäť však nie je šifrovaná. Zaškrtnuté sa heslo a kľúč pridajú do súboru exportu nastavení (čitateľne) a import ich prevezme; export je potom chránený heslom správcu, ak ho máte. Bez zaškrtnutia v exporte nie sú a import ich nemení.",printSave:"Uložiť tlačiareň",printForget:"Zabudnúť heslo a kľúč",printNow:"Stav:",printIntro:"Ukazuje priebeh tlače na obrazovke 3D tlač (zapnete na záložke Obrazovky) a upozorní, keď tlač skončí, zlyhá alebo sa pozastaví. Obrazovka sa do striedania pridáva len počas tlače. Keď tlačiareň neodpovedá, zariadenie sa pýta raz za minútu, po hodine raz za 5 minút, a nič iné tým nezdržuje.",printAlertHdr:"Upozornenia",printAlertFinish:"Tlač je hotová",printAlertError:"Chyba tlače",printAlertPause:"Tlač sa pozastavila (filament, tlačiareň vyžaduje pozornosť)",printNight:"V noci",printNight0:"nočný jas, blikať",printNight1:"plný jas, blikať",printNight2:"nočný jas, neblikať",printAlertHint:"Upozornenie prepne na obrazovku 3D tlač, aj keď je vypnutá, a drží ju, kým sa displeja nedotknete. Keď nikto nepríde, po 30 minútach sa vráti predchádzajúca obrazovka a na hodinách zostane farebná bodka. Zrušená tlač neupozorňuje, pretože ju zvyčajne zrušil sám používateľ. Po reštarte zariadenia sa už hotová tlač znova nehlási.",printSt:"3D tlačiareň",printStored:"uložené",printNone:"nezadané",printInExport:"aj v exporte",printForgotten:"Heslo a kľúč zabudnuté",psDisabled:"vypnuté",psUnknown:"zisťujem…",psOffline:"nedostupná",psAuth:"chýba alebo nesedí heslo / API kľúč",psBad:"odpovedá, ale nerozumiem (typ, adresa?)",psIdle:"pripravená",psPrep:"pripravuje sa",psPrinting:"tlačí",psPaused:"pozastavené",psFinished:"hotovo",psFailed:"chyba",psCancelled:"zrušené",psLeft:"zostáva",psNext:"ďalší pokus o"}};
 let L="cs", CFG={}, TAB="tCtl";
 const $=id=>document.getElementById(id);
@@ -976,7 +1070,7 @@ function setLang(v){L=LANGS[+v]||(LANGS.includes(v)?v:"cs");$("uiLang").value=St
  document.documentElement.lang=L;
  document.querySelectorAll("[data-i18n]").forEach(e=>{const t=D[L][e.dataset.i18n];if(!t)return;
   if(e.classList.contains("hint"))hint(e,t);else e.textContent=t.replace("{u}",MET()?"m":"ft");});
- pwState();feeHint();status();if(CFG.wifi)wifiSlots();iconLegend();altLabels();if(CFG.printUser!==undefined)printTypeUi();if(CFG.fxListEff)fxFill();}
+ pwState();feeHint();status();if(CFG.wifi)wifiSlots();iconLegend();altLabels();if(CFG.printUser!==undefined)printTypeUi();if(CFG.bambu)bambuModeUi();if(CFG.fxListEff)fxFill();}
 
 // A hint shows its first sentence; the rest is folded under "More", which
 // reads "Less" while it is open (0.9.0). Splitting
@@ -1026,18 +1120,19 @@ const TAB_VIS={
  tPlanes:()=>isOn("sPlanes")||isOn("planeAlert"),
  tMeteo:()=>isOn("sMeteo")||isOn("stormOnly"),
  tEnergy:()=>isOn("sPrice")||isOn("sMix"),
- tPrint:()=>isOn("sPrint")||isOn("printOn"),
+ tPrint:()=>isOn("sPrint")||isOn("printOn")||isOn("sBambu")||isOn("bambuOn"),
  tFx:()=>isOn("sFx")||isOn("sCrypto")};
 function tabVis(){
  for(const id in TAB_VIS){
   const b=document.querySelector('#tabs button[data-tab="'+id+'"]');
   b.classList.toggle("hide",!TAB_VIS[id]()&&TAB!=id);
  }
+ $("prusaAlerts").classList.toggle("hide",!isOn("sPrint")&&!isOn("printOn"));
  $("cardPrice").classList.toggle("hide",!isOn("sPrice"));
  $("cardMix").classList.toggle("hide",!isOn("sMix"));
  $("cardCrypto").classList.toggle("hide",!isOn("sCrypto"));
 }
-["sClock","sPlanes","sMeteo","sPrice","sMix","sPrint","sFx","sCrypto","planeAlert","stormOnly","printOn"]
+["sClock","sPlanes","sMeteo","sPrice","sMix","sPrint","sFx","sCrypto","planeAlert","stormOnly","printOn","sBambu","bambuOn"]
  .forEach(id=>$(id).addEventListener("change",tabVis));
 
 // One timer: an older message's timeout must not wipe a newer message early.
@@ -1049,7 +1144,7 @@ function hexToRgb565(h){const r=parseInt(h.substr(1,2),16),g=parseInt(h.substr(3
  return ((r>>3)<<11)|((g>>2)<<5)|(b>>3);}
 
 const SCR=[["scrClock",0],["scrPlanes",1],["scrMeteo",2],["scrForecast",3],
-           ["scrPrice",4],["scrMix",5],["scrPrint",7],["scrFx",8],["scrCrypto",9],["settings",6]];
+           ["scrPrice",4],["scrMix",5],["scrPrint",7],["scrBambu",10],["scrFx",8],["scrCrypto",9],["settings",6]];
 function drawScrBtns(cur,enabled){
  $("scrBtns").innerHTML=SCR.map(([k,i])=>{
   const on=enabled?enabled[i]:true;
@@ -1121,7 +1216,7 @@ async function restartNow(){try{await fetch("/api/reboot",{method:"POST"});}catc
 function saveLoc(){const la=parseFloat($("lat").value),lo=parseFloat($("lon").value);
  if(isNaN(la)||isNaN(lo))return;autoSaveObj("loc",{lat:la,lon:lo});}
 ["lat","lon"].forEach(id=>$(id).addEventListener("change",saveLoc));
-const SCR_IDS={clock:"sClock",planes:"sPlanes",meteo:"sMeteo",forecast:"sForecast",price:"sPrice",mix:"sMix",print:"sPrint",fx:"sFx",crypto:"sCrypto"};
+const SCR_IDS={clock:"sClock",planes:"sPlanes",meteo:"sMeteo",forecast:"sForecast",price:"sPrice",mix:"sMix",print:"sPrint",bambu:"sBambu",fx:"sFx",crypto:"sCrypto"};
 function saveScreens(){const o={};for(const k in SCR_IDS)o[k]=$(SCR_IDS[k]).checked;autoSaveObj("screens",{screens:o});}
 Object.values(SCR_IDS).forEach(id=>$(id).addEventListener("change",saveScreens));
 
@@ -1249,9 +1344,10 @@ async function load(){
  $("sClock").checked=CFG.screens.clock;$("sPlanes").checked=CFG.screens.planes;
  $("sMeteo").checked=CFG.screens.meteo;$("sForecast").checked=CFG.screens.forecast;
  $("sPrice").checked=!!CFG.screens.price;$("sMix").checked=!!CFG.screens.mix;
- $("sPrint").checked=!!CFG.screens.print;$("sFx").checked=!!CFG.screens.fx;$("sCrypto").checked=!!CFG.screens.crypto;
+ $("sBambu").checked=!!CFG.screens.bambu;$("sPrint").checked=!!CFG.screens.print;$("sFx").checked=!!CFG.screens.fx;$("sCrypto").checked=!!CFG.screens.crypto;
  fxFill();
  printFill();
+ bambuFill();
  $("priceFee").value=CFG.priceFee||0;$("priceVat").value=CFG.priceVat||0;
  $("mixCountry").value=CFG.mixCountry||"cz";
  feeHint();
@@ -1325,7 +1421,10 @@ async function status(){
   [D[L].timezone,s.timezone],
   ["Firmware","v"+s.version],[D[L].board,s.board]];
  printStatus(s.print);
- $("statusTab").innerHTML=rows.map(r=>"<tr><td>"+r[0]+"</td><td>"+r[1]+"</td></tr>").join("");}catch(e){}
+ const bambuText=printStatus(s.bambu,"bambuSt");
+ if(CFG.bambu&&CFG.bambu.on)rows.push(["Bambu Lab",bambuText]);
+ const table=$("statusTab");table.textContent="";
+ rows.forEach(pair=>{const row=table.insertRow();for(const value of pair)row.insertCell().textContent=value;});}catch(e){}
 }
 setInterval(status,10000);
 
@@ -1354,9 +1453,10 @@ function printTypeUi(){
 $("printType").addEventListener("change",printTypeUi);
 // The Home Assistant YAML lists the print sensors only with the watch on.
 $("printOn").addEventListener("change",()=>{CFG.printOn=$("printOn").checked;haInfo();});
-function printStatus(p){
- if(!p||!$("printSt"))return;
- const T=D[L],k={disabled:T.psDisabled,unknown:T.psUnknown,offline:T.psOffline,auth:T.psAuth,bad_reply:T.psBad,
+function printStatus(p,id="printSt"){
+ if(!p)return "–";
+ const T=D[L],k={disabled:T.psDisabled,unknown:T.psUnknown,offline:T.psOffline,auth:id=="bambuSt"?T.bAuth:T.psAuth,bad_reply:T.psBad,
+  no_report:T.bReport,certificate_changed:T.bCert,
   idle:T.psIdle,preparing:T.psPrep,printing:T.psPrinting,paused:T.psPaused,finished:T.psFinished,failed:T.psFailed,
   cancelled:T.psCancelled}[p.state]||p.state;
  let t=k;
@@ -1365,7 +1465,61 @@ function printStatus(p){
  if(p.file)t+=" – "+p.file;
  if(p.material)t+=" ("+p.material+")";
  if(p.state=="offline"&&p.next_s!=null)t+=" – "+T.psNext+" "+Math.max(0,p.next_s)+" s";
- $("printSt").textContent=t;
+ $(id).textContent=t;return t;
+}
+function bambuModeUi(){
+ const cloud=$("bambuMode").value==="cloud", b=CFG.bambu||{}, t=D[L];
+ $("bambuLan").classList.toggle("hide",cloud);
+ $("bambuCloud").classList.toggle("hide",!cloud);
+ $("bambuSecretState").textContent=(cloud?t.bToken:t.bCode)+" · "+((cloud?b.hasToken:b.hasCode)?t.printStored:t.printNone);
+}
+function bambuFill(){
+ const b=CFG.bambu||{};
+ $("bambuOn").checked=!!b.on;
+ $("bambuMode").value=b.mode||"lan";$("bambuRegion").value=b.region||"global";
+ $("bambuSerial").value=b.serial||"";$("bambuHost").value=b.host||"";
+ $("bambuCode").value="";$("bambuToken").value="";
+ for(const [key,id] of [["finish","bambuFinish"],["error","bambuError"],["pause","bambuPause"]])
+  $(id).checked=b[key]!==false;
+ $("bambuNight").value=String(b.night||0);
+ bambuModeUi();
+}
+$("bambuMode").addEventListener("change",bambuModeUi);
+for(const [key,id] of [["on","bambuOn"],["finish","bambuFinish"],["error","bambuError"],["pause","bambuPause"],["night","bambuNight"]]){
+ $(id).addEventListener("change",()=>{
+  const val=key==="night"?+$(id).value:$(id).checked;
+  CFG.bambu[key]=val;autoSaveObj(id,{bambu:{[key]:val}});
+  if(key==="on")haInfo();
+ });
+}
+async function saveBambu(forget=false){
+ const b=forget?{forget:true}:{mode:$("bambuMode").value,serial:$("bambuSerial").value.trim()};
+ if(!forget){
+  if(!/^[A-Za-z0-9]{1,32}$/.test(b.serial)){msg(D[L].bInvalid,"warn");return;}
+  if(b.mode==="lan"){
+   b.host=$("bambuHost").value.trim();
+   const octets=b.host.split(".");
+   if(octets.length!==4||octets.some(o=>!/^\d{1,3}$/.test(o)||+o>255)){msg(D[L].bInvalid,"warn");return;}
+   if($("bambuCode").value){
+    b.code=$("bambuCode").value;
+    if(b.code.length!==8){msg(D[L].bInvalid,"warn");return;}
+   }
+  }else{
+   b.region=$("bambuRegion").value;
+   if($("bambuToken").value)b.token=$("bambuToken").value.trim();
+  }
+ }
+ try{
+  const r=await api("/api/config",{bambu:b});
+  if(!r.ok){msg(r.status===400?D[L].bInvalid:D[L].failed,"err");return;}
+  const latest=(await(await fetch("/api/config")).json()).bambu;
+  // A live toggle may still be inside its debounce. Refresh connection fields only.
+  for(const key of ["host","serial","mode","region","hasCode","hasToken"]) CFG.bambu[key]=latest[key];
+  $("bambuCode").value="";$("bambuToken").value="";
+  if(forget){$("bambuMode").value=latest.mode;$("bambuRegion").value=latest.region;
+   $("bambuSerial").value=latest.serial;$("bambuHost").value=latest.host;}
+  bambuModeUi();msg(forget?D[L].bForgotten:D[L].saved,"ok");setTimeout(status,1000);
+ }catch(e){msg(D[L].failed,"err");}
 }
 async function savePrint(){
  const b={printOn:$("printOn").checked,printType:+$("printType").value,printHost:$("printHost").value.trim(),
@@ -1494,6 +1648,14 @@ function haInfo(){
   (dc?"        device_class: "+dc+"\n":"")+(extra||"");
  // Weather is null until the first forecast lands - unavailable, not zero.
  const av=k=>"        availability: "+q+"{{ value_json."+k+" is not none }}"+q+"\n";
+ function printerSensors(key,names){
+  const base="value_json."+key, available=field=>"        availability: "+q+"{{ "+base+" is defined and "+base+"."+field+" is not none }}"+q+"\n";
+  return S(names[0],base+".state | default('off', true)")+
+   S(names[1],base+".progress","%",null,available("progress"))+
+   S(names[2],base+".remaining_s","s","duration",available("remaining_s"))+
+   S(names[3],base+".nozzle_c","°C","temperature",available("nozzle_c"))+
+   S(names[4],base+".bed_c","°C","temperature",available("bed_c"));
+ }
  $("haYaml").textContent=
   "rest:\n  - resource: "+url+"\n    scan_interval: 60\n    sensor:\n"+
   S("MPR Teplota","value_json.temperature","°C","temperature","        state_class: measurement\n"+av("temperature"))+
@@ -1508,16 +1670,8 @@ function haInfo(){
    ["distance_km","altitude_m","speed_kmh","type","kind","bearing","in_window"].map(a=>"          - "+a+"\n").join(""))+
   S("MPR Cena elektriny","value_json.price_czk_kwh","CZK/kWh",null,
    "        availability: "+q+"{{ value_json.price_czk_kwh is defined }}"+q+"\n")+
-  (CFG.printOn?
-   S("MPR Tisk stav","value_json.print.state | default('off', true)")+
-   S("MPR Tisk prubeh","value_json.print.progress","%",null,
-    "        availability: "+q+"{{ value_json.print is defined and value_json.print.progress is not none }}"+q+"\n")+
-   S("MPR Tisk zbyva","value_json.print.remaining_s","s","duration",
-    "        availability: "+q+"{{ value_json.print is defined and value_json.print.remaining_s is not none }}"+q+"\n")+
-   S("MPR Tryska","value_json.print.nozzle_c","°C","temperature",
-    "        availability: "+q+"{{ value_json.print is defined and value_json.print.nozzle_c is not none }}"+q+"\n")+
-   S("MPR Podlozka","value_json.print.bed_c","°C","temperature",
-    "        availability: "+q+"{{ value_json.print is defined and value_json.print.bed_c is not none }}"+q+"\n"):"")+
+  (CFG.printOn?printerSensors("print",["MPR Tisk stav","MPR Tisk prubeh","MPR Tisk zbyva","MPR Tryska","MPR Podlozka"]):"")+
+  (CFG.bambu&&CFG.bambu.on?printerSensors("bambu",["MPR Bambu stav","MPR Bambu prubeh","MPR Bambu zbyva","MPR Bambu tryska","MPR Bambu podlozka"]):"")+
   "    binary_sensor:\n"+
   "      - name: "+q+"MPR Bourka"+q+"\n        unique_id: mpr_bourka\n        value_template: "+q+"{{ 'on' if value_json.storm.active else 'off' }}"+q+"\n        device_class: safety\n"+
   "      - name: "+q+"MPR Letadlo nablizku"+q+"\n        unique_id: mpr_letadlo_nablizku\n        value_template: "+q+"{{ 'on' if value_json.aircraft.alert else 'off' }}"+q+"\n";

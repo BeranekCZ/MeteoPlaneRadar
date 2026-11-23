@@ -5,6 +5,7 @@
 //  Author:  Petr / chiptron.cz   (vyvoj / development: chiptron.cz)
 // =============================================================================
 #include "StormWatch.h"
+#include "RadarPng.h"
 #include "CHMU.h"
 #include "Settings.h"
 #include "Config.h"
@@ -12,10 +13,8 @@
 #include "Geo.h"
 
 #include <WiFi.h>
-#include <PNGdec.h>
 #include <esp_heap_caps.h>
 #include <math.h>
-#include <new>
 
 // -----------------------------------------------------------------------------
 //  The CHMU colour scale, 4 dBZ per step (scl-dbzmmh.png on opendata.chmi.cz).
@@ -86,9 +85,7 @@ bool StormWatch_InCoverage() {
 // -----------------------------------------------------------------------------
 //  Decoding
 //
-//  The PNG decoder object is ~60 kB. The weather screen's own lives in .bss;
-//  a second one there would come straight out of the internal RAM every TLS
-//  handshake needs, so this one is placed in PSRAM.
+//  Storm analysis has its own decoder and line buffer.
 // -----------------------------------------------------------------------------
 static PNG*      s_png = nullptr;
 static uint8_t*  s_buf = nullptr;
@@ -142,11 +139,7 @@ static int drawCb(PNGDRAW* d) {
 }
 
 static bool ensureBuffers() {
-  if (!s_png) {
-    void* mem = heap_caps_malloc(sizeof(PNG), MALLOC_CAP_SPIRAM);
-    if (!mem) return false;
-    s_png = new (mem) PNG();
-  }
+  if (!RadarPng_Ensure(s_png)) return false;
   if (!s_buf) s_buf = (uint8_t*)heap_caps_malloc(CHMU_MAX_PNG, MALLOC_CAP_SPIRAM);
   return s_buf != nullptr;
 }

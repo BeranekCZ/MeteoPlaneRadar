@@ -6,12 +6,14 @@
 //  marked "task only" below. loop() owns the settings; PrintWatch_Tick() copies
 //  them into s_cfg under the mutex whenever Settings_PrintGen() moves, and the
 //  task takes a copy of s_cfg at the start of every round. The results go the
-//  other way through s_info / s_hist / s_event, again only under the mutex.
+//  other way through s_info, the history, and the shared printer notice queue.
 //  Nothing in here calls into Settings, the display or the web server.
 //
 //  Author:  Petr / chiptron.cz   (vyvoj / development: chiptron.cz)
 // =============================================================================
 #include "PrintWatch.h"
+#include "PrintHistory.h"
+#include "PrintNotices.h"
 #include "PrintParse.h"
 #include "Settings.h"
 #include "Config.h"
@@ -38,16 +40,12 @@ struct Cfg {
   char pass[64] = "";
   uint32_t gen = 0;
 };
-struct Sample { uint32_t t; int16_t noz, nozT, bed, bedT; };
 
 static SemaphoreHandle_t s_mtx = nullptr;
 static TaskHandle_t      s_task = nullptr;
 static Cfg       s_cfg;
 static PrintInfo s_info;
-static Sample    s_hist[PRINT_HIST_N];
-static int       s_histN = 0, s_histHead = 0;   // ring: head = next write
-static PrintEvent s_event = PE_NONE;
-static char      s_eventMsg[64] = "";
+static PrintHistory s_hist;
 static volatile bool s_view = false;            // the Print screen is up
 static uint32_t  s_cfgGenSeen = 0;              // loop side
 
@@ -282,20 +280,6 @@ static PrintState pollKlipper(const Cfg& c, PrintInfo& n) {
 // -----------------------------------------------------------------------------
 //  The task
 // -----------------------------------------------------------------------------
-static int16_t tenth(float v) { return isfinite(v) ? (int16_t)lroundf(v * 10.0f) : INT16_MIN; }
-
-static void addSample(const PrintInfo& n) {
-  if (!isfinite(n.tNoz) && !isfinite(n.tBed)) return;
-  const uint32_t now = millis() / 1000;
-  if (s_histN) {
-    const Sample& last = s_hist[(s_histHead + PRINT_HIST_N - 1) % PRINT_HIST_N];
-    if (now - last.t < PRINT_HIST_STEP_S) return;
-  }
-  s_hist[s_histHead] = { now, tenth(n.tNoz), tenth(n.tNozT), tenth(n.tBed), tenth(n.tBedT) };
-  s_histHead = (s_histHead + 1) % PRINT_HIST_N;
-  if (s_histN < PRINT_HIST_N) s_histN++;
-}
-
 static uint32_t interval(const PrintInfo& n, bool view) {
   if (n.state == PS_OFFLINE || n.state == PS_UNKNOWN) {
     if (view) return PRINT_POLL_VIEW_OFF_MS;
@@ -323,8 +307,8 @@ static void resetForConfig(uint32_t gen) {
   // "Checking..." rather than "set up the printer" for the few seconds the
   // first answer takes.
   s_info.state = on ? PS_UNKNOWN : PS_DISABLED;
-  s_histN = 0; s_histHead = 0;
-  s_event = PE_NONE;
+  s_hist.clear();
+  PrintNotices_Clear(SCREEN_PRINT_I);
   unlock();
 }
 
@@ -386,12 +370,8 @@ static void task(void*) {
     if (s_cfg.gen == t_gen) {
       n.nextPollMs = now + interval(n, s_view);
       s_info = n;
-      if (PrintState_Online(got)) addSample(n);
-      if (ev != PE_NONE) {
-        s_event = ev;
-        strncpy(s_eventMsg, n.message, sizeof(s_eventMsg) - 1);
-        s_eventMsg[sizeof(s_eventMsg) - 1] = '\0';
-      }
+      if (PrintState_Online(got)) s_hist.add(n, now);
+      PrintNotices_Post(SCREEN_PRINT_I, ev, n);
     }
     const uint32_t wait = interval(n, s_view);
     unlock();
@@ -445,31 +425,11 @@ bool PrintWatch_Get(PrintInfo* out) {
   return true;
 }
 
-PrintEvent PrintWatch_TakeEvent(char* msg, size_t cap) {
-  if (!s_mtx) return PE_NONE;
-  lock();
-  const PrintEvent e = s_event;
-  s_event = PE_NONE;
-  if (msg && cap) { strncpy(msg, s_eventMsg, cap - 1); msg[cap - 1] = '\0'; }
-  unlock();
-  return e;
-}
-
 int PrintWatch_History(int16_t* noz, int16_t* nozT, int16_t* bed, int16_t* bedT,
                        uint16_t* ageS, int max) {
   if (!s_mtx) return 0;
   lock();
-  const int n = s_histN < max ? s_histN : max;
-  const int start = (s_histHead + PRINT_HIST_N - n) % PRINT_HIST_N;
-  const uint32_t now = millis() / 1000;
-  for (int i = 0; i < n; i++) {
-    const Sample& s = s_hist[(start + i) % PRINT_HIST_N];
-    if (noz) noz[i] = s.noz;
-    if (nozT) nozT[i] = s.nozT;
-    if (bed) bed[i] = s.bed;
-    if (bedT) bedT[i] = s.bedT;
-    if (ageS) ageS[i] = (uint16_t)((now - s.t) > 65535 ? 65535 : (now - s.t));
-  }
+  const int n = s_hist.copy(noz, nozT, bed, bedT, ageS, max, millis());
   unlock();
   return n;
 }
@@ -481,6 +441,8 @@ const char* PrintState_Name(PrintState s) {
     case PS_OFFLINE:   return "offline";
     case PS_AUTH:      return "auth";
     case PS_BADREPLY:  return "bad_reply";
+    case PS_NO_REPORT: return "no_report";
+    case PS_CERT_CHANGED: return "certificate_changed";
     case PS_IDLE:      return "idle";
     case PS_PREPARE:   return "preparing";
     case PS_PRINTING:  return "printing";

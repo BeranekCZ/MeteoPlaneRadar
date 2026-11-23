@@ -24,6 +24,8 @@
 // =============================================================================
 #include "ScreenPrint.h"
 #include "PrintWatch.h"
+#include "BambuWatch.h"
+#include "BambuDisplay.h"
 #include "Settings.h"
 #include "Layout.h"
 #include "Lang.h"
@@ -61,6 +63,17 @@
 #define C_TGT  0x4208       // target lines, dim
 
 static PrintInfo s_i;
+static bool s_bambu = false;
+static uint32_t s_lastRead = 0;
+static uint32_t s_historyRevision = 0;
+static bool s_bambuRedrawPending = false;
+static char s_alertFile[48];
+static bool readSnapshot(PrintInfo& out) {
+  if (!s_bambu) { PrintWatch_Get(&out); return false; }
+  const uint32_t previous = s_historyRevision;
+  BambuWatch_Get(&out, &s_historyRevision);
+  return previous != s_historyRevision;
+}
 static bool s_alert = false;
 static PrintEvent s_alertEv = PE_NONE;
 static char s_alertMsg[64] = "";
@@ -120,6 +133,11 @@ static void hm(int32_t s, char* out, size_t cap) {
   const long m = (s + 30) / 60;
   if (m >= 60) snprintf(out, cap, "%ldh %02ldm", m / 60, m % 60);
   else         snprintf(out, cap, "%ld min", m);
+}
+
+static long retrySeconds(uint32_t deadline, uint32_t now) {
+  const int32_t left = (int32_t)(deadline - now);
+  return deadline && left > 0 ? left / 1000 : 0;
 }
 
 static uint16_t stateColor(PrintState s) {
@@ -194,7 +212,7 @@ static void temps() {
 static void graph() {
   static int16_t n0[PRINT_HIST_N], n1[PRINT_HIST_N], b0[PRINT_HIST_N], b1[PRINT_HIST_N];
   static uint16_t age[PRINT_HIST_N];
-  const int n = PrintWatch_History(n0, n1, b0, b1, age, PRINT_HIST_N);
+  const int n = (s_bambu ? BambuWatch_History : PrintWatch_History)(n0, n1, b0, b1, age, PRINT_HIST_N);
   if (n < 2) return;
   const int span = PRINT_HIST_N * PRINT_HIST_STEP_S;          // 30 min
   int16_t hi = 500;                                          // 50 degC at least
@@ -259,9 +277,11 @@ static void jobView() {
   line(b, STATE_Y, col, 2);
 
   const bool done = (s == PS_FINISHED || s == PS_FAILED || s == PS_CANCELLED);
-  hm(done ? s_i.elapsedS : s_i.remainS, b, sizeof(b));
+  const bool showProgress = s_bambu && done && s_i.elapsedS < 0 && (s == PS_FINISHED || s_i.pct >= 0);
+  if (showProgress) snprintf(b, sizeof(b), "%d %%", s == PS_FINISHED ? 100 : (int)lroundf(s_i.pct));
+  else hm(done ? s_i.elapsedS : s_i.remainS, b, sizeof(b));
   line(b, BIG_Y, C_WHITE, 5);
-  line(done ? T(S_P_TOTAL) : T(S_P_REMAIN), BIGL_Y, C_GRAY, 1);
+  line(showProgress ? T(S_B_PROGRESS) : done ? T(S_P_TOTAL) : T(S_P_REMAIN), BIGL_Y, C_GRAY, 1);
 
   if (!done) {
     lineAt(T(S_P_ELAPSED), CX - COL_DX, COLL_Y, C_GRAY, 1, 2 * COL_DX - 10);
@@ -314,61 +334,81 @@ static void alertBanner() {
   const uint8_t hs = (Layout_TextW(head, 3) <= w - 24) ? 3 : 2;
   line(head, y + 22, fg, hs, w - 24);
   if (s_alertMsg[0]) line(messageText(s_alertMsg), y + 66, fg, 1, w - 28);
-  if (s_i.file[0])   line(s_i.file, y + 86, fg, 1, w - 28);
+  if (s_alertFile[0]) line(s_alertFile, y + 86, fg, 1, w - 28);
   line(T(S_PA_CLOSE), y + 118, fg, 1, w - 40);
 }
 
 static void alertView();
 
 // --- public ---------------------------------------------------------------------
-void ScreenPrint_Enter() {
-  PrintWatch_Get(&s_i);
+void ScreenPrint_Enter(bool bambu) {
+  s_bambu = bambu;
+  readSnapshot(s_i);
+  s_lastRead = millis();
   s_lastUpdated = s_i.updatedMs;
   s_lastState = s_i.state;
 }
 
 bool ScreenPrint_Tick() {
   bool redraw = false;
-  PrintInfo n;
-  PrintWatch_Get(&n);
-  if (n.updatedMs != s_lastUpdated || n.state != s_lastState) {
-    s_i = n; s_lastUpdated = n.updatedMs; s_lastState = n.state;
-    redraw = true;
-  }
   const unsigned long now = millis();
+  if (now - s_lastRead >= 250) {
+    s_lastRead = now;
+    PrintInfo n;
+    const bool graphChanged = readSnapshot(n);
+    if (s_bambu) {
+      redraw = BambuDisplay::changed(s_i, n, graphChanged, s_alert);
+      s_i = n;  // Keep the latest job ready when the alert is dismissed.
+    } else if (n.updatedMs != s_lastUpdated || n.state != s_lastState) {
+      s_i = n; s_lastUpdated = n.updatedMs; s_lastState = n.state;
+      redraw = true;
+    }
+  }
   if (s_alert && s_alertBlink) {
     const bool ph = (now / 600) & 1;
     if (ph != s_phase) { s_phase = ph; redraw = true; }
   }
   // Once a second: the offline countdown and the status line clock.
   if (now - s_lastSecond >= 1000) {
+    bool countdown = s_i.state == PS_OFFLINE;
+    if (countdown && s_bambu)
+      countdown = !s_alert && retrySeconds(s_i.nextPollMs, now) != retrySeconds(s_i.nextPollMs, s_lastSecond);
     s_lastSecond = now;
-    if (s_i.state == PS_OFFLINE || UI_StatusLineChanged()) redraw = true;
+    if (countdown || UI_StatusLineChanged()) redraw = true;
+  }
+  // The main loop can defer a frame until its 80 ms draw interval has elapsed.
+  if (s_bambu) {
+    s_bambuRedrawPending |= redraw;
+    return s_bambuRedrawPending;
   }
   return redraw;
 }
 
 void ScreenPrint_Draw() {
+  s_bambuRedrawPending = false;
   gfx->fillScreen(C_BLACK);
   Layout_Begin();
   Layout_ReserveBand(LY_DOTS - 6, 12);
   Layout_ReserveBand(LY_STATUS - 3, 22);
   UI_DrawStatusLine(LY_STATUS);
 
+  const char* source = s_bambu ? "Bambu Lab" : Settings_PrintType() == PRINT_TYPE_KLIPPER ? "Klipper" : "PrusaLink";
+  line(source, 376, C_GRAY, 1);
   if (s_alert) { alertView(); return; }
   char b[64];
   switch (s_i.state) {
     case PS_DISABLED: messageView(T(S_P_NOTSET), T(S_P_NOTSET2), C_WHITE); break;
-    case PS_UNKNOWN:  messageView(T(S_P_WAITING), Settings_PrintHost(), C_GRAY); break;
+    case PS_UNKNOWN:  messageView(T(S_P_WAITING), s_bambu ? "" : Settings_PrintHost(), C_GRAY); break;
     case PS_OFFLINE: {
-      long left = s_i.nextPollMs ? (long)(s_i.nextPollMs - millis()) / 1000 : 0;
-      if (left < 0) left = 0;
+      const long left = retrySeconds(s_i.nextPollMs, millis());
       snprintf(b, sizeof(b), "%s %ld s", T(S_P_RETRY), left);
       messageView(T(S_P_OFFLINE), b, C_RED);
-      line(Settings_PrintHost(), BIG_Y + 52, C_GRAY, 1);
+      if (!s_bambu) line(Settings_PrintHost(), BIG_Y + 52, C_GRAY, 1);
       break;
     }
-    case PS_AUTH:     messageView(T(S_P_AUTH), T(S_P_AUTH2), C_ORANGE); break;
+    case PS_AUTH:     messageView(s_bambu ? T(S_B_AUTH) : T(S_P_AUTH), T(S_P_AUTH2), C_ORANGE); break;
+    case PS_CERT_CHANGED: messageView(T(S_B_CERT), T(S_P_NOTSET2), C_ORANGE); break;
+    case PS_NO_REPORT: messageView(T(S_B_REPORT), T(S_B_REPORT2), C_GRAY); break;
     case PS_BADREPLY: messageView(T(S_P_BAD), T(S_P_BAD2), C_ORANGE); break;
     case PS_IDLE:     idleView(); break;
     case PS_CANCELLED:
@@ -376,7 +416,6 @@ void ScreenPrint_Draw() {
       break;
     default:          jobView(); break;
   }
-  if (s_alert) alertBanner();
 }
 
 // With the alert up only the ring, the graph and the temperatures stay round
@@ -391,14 +430,15 @@ static void alertView() {
   alertBanner();
 }
 
-void ScreenPrint_AlertBegin(PrintEvent e, const char* msg, bool blink) {
+void ScreenPrint_AlertBegin(PrintEvent e, const char* msg, const char* file, bool blink) {
   s_alert = true;
   s_alertEv = e;
+  strlcpy(s_alertFile, file, sizeof(s_alertFile));
   strncpy(s_alertMsg, msg ? msg : "", sizeof(s_alertMsg) - 1);
   s_alertMsg[sizeof(s_alertMsg) - 1] = '\0';
   s_alertBlink = blink;
   s_phase = true;
-  PrintWatch_Get(&s_i);
+  readSnapshot(s_i);
 }
 
 void ScreenPrint_AlertEnd() { s_alert = false; }

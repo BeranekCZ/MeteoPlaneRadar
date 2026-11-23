@@ -111,6 +111,11 @@
   X(S_P_AUTH2,       "zadejte ho v prohlizeci", "zadejte ho v prohlížeči", "enter it in the browser", "zadajte ho v prehliadaci", "zadajte ho v prehliadači") \
   X(S_P_BAD,         "Nerozumim odpovedi", "Nerozumím odpovědi", "Unexpected reply", "Nerozumiem odpovedi", "Nerozumiem odpovedi") \
   X(S_P_BAD2,        "zkontrolujte typ a adresu", "zkontrolujte typ a adresu", "check type and address", "skontrolujte typ a adresu", "skontrolujte typ a adresu") \
+  X(S_B_PROGRESS,    "prubeh tisku", "průběh tisku", "print progress", "priebeh tlace", "priebeh tlače") \
+  X(S_B_AUTH,        "Overte kod / token", "Ověřte kód / token", "Check code / token", "Overte kod / token", "Overte kód / token") \
+  X(S_B_CERT,        "Certifikat se zmenil", "Certifikát se změnil", "Certificate changed", "Certifikat sa zmenil", "Certifikát sa zmenil") \
+  X(S_B_REPORT,      "Cekam na stav", "Čekám na stav", "Waiting for status", "Cakam na stav", "Čakám na stav") \
+  X(S_B_REPORT2,     "zkontrolujte tiskarnu a SN", "zkontrolujte tiskárnu a SN", "check printer and serial", "skontrolujte tlaciaren a SN", "skontrolujte tlačiareň a SN") \
   X(S_P_NOTSET,      "Nastavte tiskarnu", "Nastavte tiskárnu", "Set up the printer", "Nastavte tlaciaren", "Nastavte tlačiareň") \
   X(S_P_NOTSET2,     "v prohlizeci, zalozka Tiskarna", "v prohlížeči, záložka Tiskárna", "in the browser, Printer tab", "v prehliadaci, zalozka Tlaciaren", "v prehliadači, záložka Tlačiareň") \
   X(S_P_REMAIN,      "zbyva", "zbývá", "left", "zostava", "zostáva") \

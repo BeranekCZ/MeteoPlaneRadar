@@ -26,11 +26,11 @@
 #include "Lang.h"
 #include "Status.h"
 #include "RainViewer.h"
+#include "RadarPng.h"
 #include "Display_ST7701.h"
 #include "EuBorder.h"
 
 #include <WiFi.h>
-#include <PNGdec.h>
 #include <math.h>
 #include <string.h>
 #include <esp_heap_caps.h>
@@ -48,7 +48,7 @@ static const int   RANGE_COUNT = sizeof(RANGES_KM) / sizeof(RANGES_KM[0]);
 static int s_rangeIdx = 1;
 static float currentRange() { return RANGES_KM[s_rangeIdx]; }
 
-static PNG png;
+static PNG* png = nullptr;
 static int s_imgW = 600, s_imgH = 480;
 static int s_dataX1 = 100000, s_dataY0 = -1;   // data bounds (outside = title/scale in PNG)
 static String s_status = "Start...";
@@ -175,7 +175,7 @@ static int pngDraw(PNGDRAW* d) {
   int srcY = d->y;
   if (srcY < s_crop.y1 || srcY > s_crop.y2) return 1;
   if (!s_crop565 || !s_lineBuf) return 1;
-  png.getLineAsRGB565(d, s_lineBuf, PNG_RGB565_LITTLE_ENDIAN, 0xffffffff);
+  png->getLineAsRGB565(d, s_lineBuf, PNG_RGB565_LITTLE_ENDIAN, 0xffffffff);
   const int cw = cropW();
   uint16_t* row = s_crop565 + (int64_t)(srcY - s_crop.y1) * cw;
   for (int i = 0; i < cw; i++) {
@@ -231,17 +231,17 @@ static void blitCrop() {
 // -----------------------------------------------------------------------------
 static bool rebuildCrops() {
   int cnt = CHMU_AnimCount();
-  if (cnt <= 0) { s_frameCount = 0; return false; }
+  if (cnt <= 0 || !RadarPng_Ensure(png)) { s_frameCount = 0; return false; }
   if (cnt > ANIM_FRAMES) cnt = ANIM_FRAMES;
 
   // Dimensions + width sanity check from the first frame.
-  if (png.openRAM(CHMU_AnimData(0), CHMU_AnimSize(0), pngDraw) != PNG_SUCCESS) { s_frameCount = 0; return false; }
-  s_imgW = png.getWidth(); s_imgH = png.getHeight();
+  if (png->openRAM(CHMU_AnimData(0), CHMU_AnimSize(0), pngDraw) != PNG_SUCCESS) { s_frameCount = 0; return false; }
+  s_imgW = png->getWidth(); s_imgH = png->getHeight();
   s_dataX1 = lonToX(CHMU_LON_DATA_RIGHT);   // right of this x = scale/edge
   s_dataY0 = latToY(CHMU_LAT_DATA_TOP);     // above this y = title
-  int bufSize = png.getBufferSize();
+  int bufSize = png->getBufferSize();
   int pitch = (s_imgH > 0) ? bufSize / s_imgH : bufSize;
-  png.close();
+  png->close();
   if (2 * (pitch + 1) > (int)PNG_MAX_BUFFERED_PIXELS) { s_wide = true; s_frameCount = 0; return false; }
   s_wide = false;
 
@@ -278,9 +278,9 @@ static bool rebuildCrops() {
     // decoder at all, so they have to start out black rather than holding the
     // previous frame's pixels.
     memset(s_crop565, 0, (size_t)need * 2);
-    if (png.openRAM(CHMU_AnimData(f), CHMU_AnimSize(f), pngDraw) != PNG_SUCCESS) { png.close(); break; }
-    png.decode(nullptr, 0);
-    png.close();
+    if (png->openRAM(CHMU_AnimData(f), CHMU_AnimSize(f), pngDraw) != PNG_SUCCESS) { png->close(); break; }
+    png->decode(nullptr, 0);
+    png->close();
     okc++;
   }
   s_frameCount = okc;

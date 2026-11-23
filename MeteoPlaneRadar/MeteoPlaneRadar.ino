@@ -111,6 +111,9 @@
 #include "PlaneWatch.h"
 #include "PrintWatch.h"   // 0.9.0
 #include "ScreenPrint.h"
+#include "BambuWatch.h"
+#include "BambuSettings.h"
+#include "PrintNotices.h"
 #include "ScreenFx.h"     // 0.9.6
 #include "Fx.h"
 #include "ScreenCrypto.h" // 0.9.7
@@ -236,14 +239,14 @@ static void touchPump() {
 static void netPoll() { yield(); Watchdog_PollFeed(Net_Activity()); touchPump(); }
 
 static void checkBootReset() {
-  pinMode(BOOT_PIN, INPUT_PULLUP);
-  if (digitalRead(BOOT_PIN) != LOW) return;
+  pinMode(MPR_BOOT_PIN, INPUT_PULLUP);
+  if (digitalRead(MPR_BOOT_PIN) != LOW) return;
   gfx->fillScreen(C_BLACK);
   UI_TextCentered(LT("Drzte pro reset...", "Držte pro reset...", "Hold to reset...", "Drzte pre reset...", "Držte pre reset..."),
                   LCD_HEIGHT / 2, C_WHITE, 2);
   gfx->flush();
   unsigned long start = millis();
-  while (digitalRead(BOOT_PIN) == LOW) {
+  while (digitalRead(MPR_BOOT_PIN) == LOW) {
     if (millis() - start >= 3000) {
       UI_TextCentered(LT("Mazu nastaveni", "Mažu nastavení", "Erasing settings", "Mazem nastavenia", "Mažem nastavenia"),
                       LCD_HEIGHT / 2 + 30, C_RED, 2);
@@ -285,6 +288,9 @@ static int orderStep(int idx, int dir) {
 // glass is touched, or for PRINT_ALERT_MAX_MS - then the screen it interrupted
 // comes back and a small dot on the clock remembers that something happened.
 static bool          s_pAlertOn = false;
+static uint8_t       s_pAlertScreen = SCREEN_PRINT_I;
+static PrintEvent    s_pAlertEvent = PE_NONE;
+static uint32_t      s_bambuAlertRevision = 0;
 static unsigned long s_pAlertSince = 0;
 static int           s_pAlertReturn = -1;
 static bool          s_pAlertFullBri = false;
@@ -302,7 +308,8 @@ static int           s_alertReturn = -1;
 // at boot), not the automatic cycling or an alert.
 int  MPR_CurrentScreen() { return s_screen; }
 bool MPR_AlertActive()   { return s_alertOn; }          // the aircraft alert
-bool MPR_PrintAlertActive() { return s_pAlertOn; }   // 0.9.0
+bool MPR_PrintAlertActive() { return s_pAlertOn && s_pAlertScreen == SCREEN_PRINT_I; }
+bool MPR_BambuAlertActive() { return s_pAlertOn && s_pAlertScreen == SCREEN_BAMBU_I; }
 
 // Reachable at all: has a dot, a long press stops on it. 0.8.0 adds two ways
 // for a screen that is switched off to turn up anyway - the weather radar
@@ -312,15 +319,15 @@ static bool screenVisible(int i) {
   if (Settings_ScreenEnabled((uint8_t)i)) return true;
   if (i == SCREEN_METEO_I && Settings_StormOnly() && StormWatch_Active()) return true;
   if (i == SCREEN_PLANES_I && s_alertOn) return true;
-  if (i == SCREEN_PRINT_I && s_pAlertOn) return true;
+  if (s_pAlertOn && i == s_pAlertScreen) return true;
   return false;
 }
 
 // 0.9.0: is a print going on? The Print screen joins the cycling only then -
 // a screen saying "printer not reachable" every round would be noise.
-static bool printActive() {
+static bool printActive(int screen) {
   PrintInfo pi;
-  return PrintWatch_Get(&pi) && PrintState_Active(pi.state);
+  return (screen == SCREEN_BAMBU_I ? BambuWatch_Get(&pi) : PrintWatch_Get(&pi)) && PrintState_Active(pi.state);
 }
 
 // Part of the AUTOMATIC cycling. Narrower than visible: with "radar only when
@@ -331,7 +338,7 @@ static bool inRotation(int i) {
   if (i == SCREEN_SETTINGS_I) return false;
   if (i == SCREEN_METEO_I && Settings_StormOnly()) return StormWatch_Active();
   if (i == SCREEN_PLANES_I && Settings_PlaneAlert()) return false;
-  if (i == SCREEN_PRINT_I) return Settings_ScreenEnabled((uint8_t)i) && printActive();
+  if (i == SCREEN_PRINT_I || i == SCREEN_BAMBU_I) return Settings_ScreenEnabled((uint8_t)i) && printActive(i);
   return Settings_ScreenEnabled((uint8_t)i);
 }
 
@@ -409,6 +416,7 @@ static void drawActive() {
     case SCREEN_PRICE_I:    ScreenPrice_Draw();    break;
     case SCREEN_MIX_I:      ScreenMix_Draw();      break;
     case SCREEN_SETTINGS_I: ScreenSettings_Draw(); break;
+    case SCREEN_BAMBU_I:
     case SCREEN_PRINT_I:    ScreenPrint_Draw();    break;
     case SCREEN_FX_I:       ScreenFx_Draw();       break;
     case SCREEN_CRYPTO_I:   ScreenCrypto_Draw();   break;
@@ -429,7 +437,8 @@ static void enterActive() {
     case SCREEN_PRICE_I:    ScreenPrice_Enter();    break;
     case SCREEN_MIX_I:      ScreenMix_Enter();      break;
     case SCREEN_SETTINGS_I: ScreenSettings_Enter(); break;
-    case SCREEN_PRINT_I:    ScreenPrint_Enter();    break;
+    case SCREEN_BAMBU_I:
+    case SCREEN_PRINT_I:    ScreenPrint_Enter(s_screen == SCREEN_BAMBU_I);    break;
     case SCREEN_FX_I:       ScreenFx_Enter();       break;
     case SCREEN_CRYPTO_I:   ScreenCrypto_Enter();   break;
   }
@@ -472,6 +481,7 @@ static bool activeTick() {
     case SCREEN_PRICE_I:    return ScreenPrice_Tick();
     case SCREEN_MIX_I:      return ScreenMix_Tick();
     case SCREEN_SETTINGS_I: return ScreenSettings_Tick();
+    case SCREEN_BAMBU_I:
     case SCREEN_PRINT_I:    return ScreenPrint_Tick();
     case SCREEN_FX_I:       return ScreenFx_Tick();
     case SCREEN_CRYPTO_I:   return ScreenCrypto_Tick();
@@ -684,72 +694,65 @@ static void printAlertEnd(bool back) {
   s_pAlertOn = false;
   ScreenPrint_AlertEnd();
   if (s_pAlertFullBri) { s_pAlertFullBri = false; NightMode_SetBoost(false); }
-  if (back && s_screen == SCREEN_PRINT_I) {
+  if (back && s_screen == s_pAlertScreen) {
     int r = s_pAlertReturn;
-    if (r < 0 || r >= SCREEN_N || !screenVisible(r) || r == SCREEN_PRINT_I) {
+    if (r < 0 || r >= SCREEN_N || !screenVisible(r) || r == s_pAlertScreen) {
       r = SCREEN_SETTINGS_I;
       for (int p = 0; p < SCREEN_N; p++) if (screenVisible(SCREEN_ORDER[p])) { r = SCREEN_ORDER[p]; break; }
     }
     s_screen = r;
     s_dotsAuto = back;                   // timed out: nobody asked for it
     enterActive();
-  } else if (s_screen == SCREEN_PRINT_I) {
+  } else if (s_screen == s_pAlertScreen) {
     drawActive();
   }
   s_lastRotate = millis();
 }
 
 static void printAlertTick() {
-  const unsigned long now = millis();
+  const uint32_t now = millis();
   if (s_pAlertOn) {
-    if (now - s_pAlertSince >= PRINT_ALERT_MAX_MS) {
-      // Nobody came. Leave a dot on the clock so it is not lost entirely.
-      PrintInfo pi; PrintWatch_Get(&pi);
-      ScreenClock_SetBadge(pi.state == PS_FINISHED ? C_GREEN : pi.state == PS_FAILED ? C_RED : C_ORANGE);
+    if ((s_pAlertScreen == SCREEN_BAMBU_I && s_bambuAlertRevision != BambuSettings_Revision()) ||
+        (s_pAlertScreen == SCREEN_PRINT_I && !Settings_PrintOn())) {
+      printAlertEnd(true);
+    } else if (now - s_pAlertSince >= PRINT_ALERT_MAX_MS) {
+      ScreenClock_SetBadge(s_pAlertEvent == PE_FINISHED ? C_GREEN : s_pAlertEvent == PE_FAILED ? C_RED : C_ORANGE);
       printAlertEnd(true);
     }
     return;
   }
-  // An event that arrives while someone is on the settings screen waits
-  // there (for up to the alert's own lifetime) instead of being lost.
-  static PrintEvent    pend = PE_NONE;
-  static char          pendMsg[64] = "";
-  static unsigned long pendAt = 0;
-  char msg[64];
-  const PrintEvent got = PrintWatch_TakeEvent(msg, sizeof(msg));
-  if (got != PE_NONE) {
-    if ((got == PE_FINISHED && Settings_PrintAlertFinish()) ||
-        (got == PE_FAILED && Settings_PrintAlertError()) ||
-        (got == PE_PAUSED && Settings_PrintAlertPause())) {
-      pend = got; strncpy(pendMsg, msg, sizeof(pendMsg) - 1); pendAt = now;
-    }
-  }
-  if (pend == PE_NONE) return;
-  if (now - pendAt >= PRINT_ALERT_MAX_MS) { pend = PE_NONE; return; }
-  // Never on top of the settings screen - someone is using it.
-  if (s_screen == SCREEN_SETTINGS_I) return;
-  const PrintEvent e = pend;
-  strncpy(msg, pendMsg, sizeof(msg) - 1); msg[sizeof(msg) - 1] = '\0';
-  pend = PE_NONE;
-  Serial.printf("Tisk: udalost %d (%s)\n", (int)e, msg);
+  if (s_screen == SCREEN_SETTINGS_I) { PrintNotices_Expire(now); return; }
 
-  // It outranks the aircraft alert: a failed print matters more than a plane.
+  PrintNotice notice;
+  BambuAlerts alerts;
+  for (;;) {
+    if (!PrintNotices_Take(notice)) return;
+    if (notice.screen == SCREEN_BAMBU_I) {
+      if (!BambuSettings_On()) continue;
+      alerts = BambuSettings_Alerts();
+    } else {
+      if (!Settings_PrintOn()) continue;
+      alerts = {Settings_PrintAlertFinish(), Settings_PrintAlertError(), Settings_PrintAlertPause(), Settings_PrintNight()};
+    }
+    if ((notice.event == PE_FINISHED && alerts.finish) || (notice.event == PE_FAILED && alerts.error) ||
+        (notice.event == PE_PAUSED && alerts.pause)) break;
+  }
+
+  // Return to the original screen even when the printer interrupts an aircraft alert.
+  s_pAlertReturn = s_alertOn ? s_alertReturn : s_screen;
   if (s_alertOn) { ScreenPlanes_AlertEnd(); s_alertOn = false; }
   if (activeModalOpen()) ScreenPlanes_CloseDetail();
-
   const bool night = Settings_IsNight();
-  const uint8_t mode = Settings_PrintNight();
-  const bool blink = !(night && mode == PRINT_NIGHT_CALM);
-  // NightMode owns the backlight (0.9.2): it also knows whether the display is
-  // switched off for the night and whether an alert may light it.
-  if (night && mode == PRINT_NIGHT_FULL) { NightMode_SetBoost(true); s_pAlertFullBri = true; }
+  if (night && alerts.night == PRINT_NIGHT_FULL) { NightMode_SetBoost(true); s_pAlertFullBri = true; }
 
-  s_pAlertReturn = (s_screen == SCREEN_PRINT_I) ? -1 : s_screen;
   s_pAlertOn = true;
   s_pAlertSince = now;
-  s_screen = SCREEN_PRINT_I;
-  ScreenPrint_Enter();
-  ScreenPrint_AlertBegin(e, msg, blink);
+  s_pAlertScreen = notice.screen;
+  s_pAlertEvent = notice.event;
+  s_bambuAlertRevision = BambuSettings_Revision();
+  s_screen = notice.screen;
+  ScreenPrint_Enter(s_screen == SCREEN_BAMBU_I);
+  ScreenPrint_AlertBegin(notice.event, notice.message, notice.file, !(night && alerts.night == PRINT_NIGHT_CALM));
   ScreenClock_SetBadge(0);
   dotsShow(false);
   drawActive();
@@ -851,6 +854,7 @@ void setup() {
   // Its own task on core 0; does nothing until a printer is set up. Started
   // in AP mode too - it simply waits there for WiFi.
   PrintWatch_Begin();
+  BambuWatch_Begin();
 
   s_screen = Settings_Screen();
   if (s_screen >= SCREEN_N || !screenVisible(s_screen)) {
@@ -1002,6 +1006,7 @@ void loop() {
 
   WiFi_Loop();
   WebConfig_Loop();
+  BambuWatch_Tick();
 
   // The user asked to forget the network from the settings screen.
   if (ScreenSettings_WantsWifiReset()) {
